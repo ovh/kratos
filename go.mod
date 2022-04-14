@@ -23,12 +23,14 @@ require (
 	github.com/Masterminds/sprig/v3 v3.0.0
 	github.com/arbovm/levenshtein v0.0.0-20160628152529-48b4e1c0c4d0
 	github.com/avast/retry-go/v3 v3.1.1
+	github.com/beevik/etree v1.1.0
 	github.com/bradleyjkemp/cupaloy/v2 v2.6.0
 	github.com/bwmarrin/discordgo v0.23.0
 	github.com/bxcodec/faker/v3 v3.3.1
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cortesi/modd v0.0.0-20210323234521-b35eddab86cc
+	github.com/crewjam/saml v0.4.6
 	github.com/davecgh/go-spew v1.1.1
 	github.com/davidrjonas/semver-cli v0.0.0-20190116233701-ee19a9a0dda6
 	github.com/dgraph-io/ristretto v0.1.0
@@ -97,6 +99,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/tools v0.1.8-0.20211029000441-d6a9af8af023
+	gotest.tools v2.2.0+incompatible
 )
 
 require (
@@ -136,6 +139,7 @@ require (
 	github.com/cortesi/moddwatch v0.0.0-20210222043437-a6aaad86a36e // indirect
 	github.com/cortesi/termlog v0.0.0-20210222042314-a1eec763abec // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
+	github.com/crewjam/httperr v0.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/docker/cli v20.10.11+incompatible // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
@@ -187,6 +191,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/certificate-transparency-go v1.1.2-0.20210511102531-373a877eec92 // indirect
+	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
@@ -233,6 +238,7 @@ require (
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/markbates/hmax v1.0.0 // indirect
+	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-runewidth v0.0.12 // indirect
@@ -270,6 +276,7 @@ require (
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rjeczalik/notify v0.0.0-20181126183243-629144ba06a1 // indirect
 	github.com/rogpeppe/go-internal v1.8.0 // indirect
+	github.com/russellhaering/goxmldsig v1.1.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/santhosh-tekuri/jsonschema v1.2.4 // indirect
 	github.com/seatgeek/logrus-gelf-formatter v0.0.0-20210414080842-5b05eb8ff761 // indirect

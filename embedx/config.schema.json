@@ -312,6 +312,225 @@
         }
       }
     },
+    "selfServiceSAMLProvider": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "title":"ID of the IdentityProvider",
+          "type": "string",
+          "examples": [
+            "activedirectory1"
+          ]
+        },
+        "label": {
+          "title": "Optional string which will be used when generating labels for UI buttons.",
+          "type": "string",
+          "examples": [
+            "Microsoft Active Directory"
+          ]
+        },
+        "public_cert_path": {
+          "title": "Public Certificate Path",
+          "description": "The Public Certificate for your SAML Messages",
+          "type": "string",
+          "format": "uri",
+          "examples": [
+            "file://path/to/cert",
+            "https://foo.bar.com/path/to/cert"
+          ]
+        },
+        "private_key_path": {
+          "title": "Private Key Path",
+          "description": "The Private Key for your SAML Messages",
+          "type": "string",
+          "format": "uri",
+          "examples": [
+            "file://path/to/key",
+            "https://foo.bar.com/path/to/key"
+          ]
+        },
+        "mapper_url": {
+          "title": "Jsonnet Mapper URL",
+          "description": "The URL where the jsonnet source is located for mapping the provider's data to Ory Kratos data.",
+          "type": "string",
+          "format": "uri",
+          "examples": [
+            "file://path/to/oidc.jsonnet",
+            "https://foo.bar.com/path/to/oidc.jsonnet",
+            "base64://bG9jYWwgc3ViamVjdCA9I..."
+          ]
+        },
+        "idp_information": {
+          "type": "object",
+          "properties": {
+            "idp_metadata_url": {
+              "title": "IDP Metadata URL",
+              "description": "The URL of the metadata of the IDP",
+              "type": "string",
+              "examples": [
+                "https://path/to/metadata"
+              ]
+            },
+            "idp_certificate_path": {
+              "title": "IDP Certificate Path",
+              "description": "The path to the certificate of the IDP",
+              "type": "string",
+              "examples": [
+                "file://path/to/certificate",
+                "https://foo.bar.com/path/to/certificate"
+              ]
+            },
+            "idp_logout_url": {
+              "title": "IDP Logout URL",
+              "description": "The URL of the SLO API of the IDP",
+              "type": "string",
+              "examples": [
+                "https://path/to/logout"
+              ]
+            },
+            "idp_sso_url": {
+              "title": "IDP SSO URL",
+              "description": "The URL of the SSO Handler at the IDP",
+              "type": "string",
+              "examples": [
+                "https://path/to/sso"
+              ]
+            },
+            "idp_entity_id": {
+              "title": "The EntityID of the IDP",
+              "description": "It is a unique identifier representing the IDP in saml requests",
+              "type": "string",
+              "examples": [
+                "https://samltest.id/saml/idp"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "idp_metadata_url": {
+                    "const": {}
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "idp_logout_url",
+                  "idp_certificate_path",
+                  "idp_entity_id"
+                ]
+              },
+              "else":{
+                "properties": {
+                  "idp_certificate_path": {
+                    "const": {}
+                  },
+                  "idp_logout_url": {
+                    "const": {}
+                  },
+                  "idp_entity_id":{
+                    "const":{}
+                  },
+                  "idp_sso_url":{
+                    "const":{}
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "attributes_map": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "title": "ID",
+              "description": "The name of the IDP attribute that will represent the user ID on Kratos",
+              "type": "string",
+              "examples": [
+                "file://path/to/oidc.jsonnet",
+                "https://foo.bar.com/path/to/oidc.jsonnet",
+                "base64://bG9jYWwgc3ViamVjdCA9I..."
+              ]
+            },
+            "firstname": {
+              "title": "Firstname",
+              "description": "The name of the IDP attribute that will represent the user's firstname on Kratos",
+              "type": "string",
+              "examples": [
+                "John"
+              ]
+            },
+            "lastname": {
+              "title": "Lastname",
+              "description": "The name of the IDP attribute that will represent the user's lastname on Kratos",
+              "type": "string",
+              "examples": [
+                "Doe"
+              ]
+            },
+            "nickname": {
+              "title": "Nickname",
+              "description": "The name of the IDP attribute that will represent the user's username on Kratos",
+              "type": "string",
+              "examples": [
+                "JohnDoe1337"
+              ]
+            },
+            "gender": {
+              "title": "Gender",
+              "description": "The name of the IDP attribute that will represent the user's gender on Kratos",
+              "type": "string",
+              "examples": [
+                "Male",
+                "Female",
+                "Non-binary"
+              ]
+            },
+            "birthdate": {
+              "title": "Birthdate",
+              "description": "The name of the IDP attribute that will represent the user's birthdate on Kratos",
+              "type": "string",
+              "examples": [
+                "08/23/1978"
+              ]
+            },
+            "picture": {
+              "title": "Picture",
+              "description": "The name of the IDP attribute that will represent the user's picture on Kratos",
+              "type": "string",
+              "examples": [
+                "https://imagepicture.jpg"
+              ]
+            },
+            "email": {
+              "title": "Email",
+              "description": "The name of the IDP attribute that will represent the user's email on Kratos",
+              "type": "string",
+              "examples": [
+                "john.doe@gmail.com"
+              ]
+            },
+            "phone_number": {
+              "title": "Phone Number",
+              "description": "The name of the IDP attribute that will represent the user's phone number on Kratos",
+              "type": "string",
+              "examples": [
+                "+33678984320"
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "public_cert_path",
+        "private_key_path",
+        "mapper_url"
+      ]
+    },
     "selfServiceOIDCProvider": {
       "type": "object",
       "properties": {
@@ -767,6 +986,9 @@
           "$ref": "#/definitions/selfServiceAfterRegistrationMethod"
         },
         "oidc": {
+          "$ref": "#/definitions/selfServiceAfterRegistrationMethod"
+        },
+        "saml": {
           "$ref": "#/definitions/selfServiceAfterRegistrationMethod"
         },
         "hooks": {
@@ -1391,6 +1613,35 @@
                 "required": [
                   "config"
                 ]
+              }
+            },
+            "saml": {
+              "type": "object",
+              "title": "Specify SAML configuration",
+              "showEnvVarBlockForObject": true,
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "title": "Enables SAML Authentication Method",
+                  "default": false
+                },
+                "config": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "providers": {
+                      "title": "SAML Provider",
+                      "description": "All information required to implement a SAML authentication",
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/selfServiceSAMLProvider"
+                      }
+                    }
+                  }
+
+
+                }
               }
             },
             "oidc": {

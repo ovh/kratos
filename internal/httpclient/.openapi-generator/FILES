@@ -47,6 +47,7 @@ docs/SelfServiceRecoveryFlow.md
 docs/SelfServiceRecoveryFlowState.md
 docs/SelfServiceRecoveryLink.md
 docs/SelfServiceRegistrationFlow.md
+docs/SelfServiceSamlUrl.md
 docs/SelfServiceSettingsFlow.md
 docs/SelfServiceSettingsFlowState.md
 docs/SelfServiceVerificationFlow.md
@@ -135,6 +136,7 @@ model_self_service_recovery_flow.go
 model_self_service_recovery_flow_state.go
 model_self_service_recovery_link.go
 model_self_service_registration_flow.go
+model_self_service_saml_url.go
 model_self_service_settings_flow.go
 model_self_service_settings_flow_state.go
 model_self_service_verification_flow.go

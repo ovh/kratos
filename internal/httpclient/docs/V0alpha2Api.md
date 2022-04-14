@@ -28,6 +28,7 @@ Method | HTTP request | Description
 [**InitializeSelfServiceRecoveryFlowWithoutBrowser**](V0alpha2Api.md#InitializeSelfServiceRecoveryFlowWithoutBrowser) | **Get** /self-service/recovery/api | Initialize Recovery Flow for APIs, Services, Apps, ...
 [**InitializeSelfServiceRegistrationFlowForBrowsers**](V0alpha2Api.md#InitializeSelfServiceRegistrationFlowForBrowsers) | **Get** /self-service/registration/browser | Initialize Registration Flow for Browsers
 [**InitializeSelfServiceRegistrationFlowWithoutBrowser**](V0alpha2Api.md#InitializeSelfServiceRegistrationFlowWithoutBrowser) | **Get** /self-service/registration/api | Initialize Registration Flow for APIs, Services, Apps, ...
+[**InitializeSelfServiceSamlFlowForBrowsers**](V0alpha2Api.md#InitializeSelfServiceSamlFlowForBrowsers) | **Get** /self-service/methods/saml/auth | Initialize Registration Flow for APIs, Services, Apps, ...
 [**InitializeSelfServiceSettingsFlowForBrowsers**](V0alpha2Api.md#InitializeSelfServiceSettingsFlowForBrowsers) | **Get** /self-service/settings/browser | Initialize Settings Flow for Browsers
 [**InitializeSelfServiceSettingsFlowWithoutBrowser**](V0alpha2Api.md#InitializeSelfServiceSettingsFlowWithoutBrowser) | **Get** /self-service/settings/api | Initialize Settings Flow for APIs, Services, Apps, ...
 [**InitializeSelfServiceVerificationFlowForBrowsers**](V0alpha2Api.md#InitializeSelfServiceVerificationFlowForBrowsers) | **Get** /self-service/verification/browser | Initialize Verification Flow for Browser Clients
@@ -1652,6 +1653,67 @@ This endpoint does not need any parameter.
 ### Other Parameters
 
 Other parameters are passed through a pointer to a apiInitializeSelfServiceRegistrationFlowWithoutBrowserRequest struct via the builder pattern
+
+
+### Return type
+
+[**SelfServiceRegistrationFlow**](SelfServiceRegistrationFlow.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## InitializeSelfServiceSamlFlowForBrowsers
+
+> SelfServiceRegistrationFlow InitializeSelfServiceSamlFlowForBrowsers(ctx).Execute()
+
+Initialize Registration Flow for APIs, Services, Apps, ...
+
+
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    apiClient := openapiclient.NewAPIClient(configuration)
+    resp, r, err := apiClient.V0alpha2Api.InitializeSelfServiceSamlFlowForBrowsers(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `V0alpha2Api.InitializeSelfServiceSamlFlowForBrowsers``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `InitializeSelfServiceSamlFlowForBrowsers`: SelfServiceRegistrationFlow
+    fmt.Fprintf(os.Stdout, "Response from `V0alpha2Api.InitializeSelfServiceSamlFlowForBrowsers`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiInitializeSelfServiceSamlFlowForBrowsersRequest struct via the builder pattern
 
 
 ### Return type
