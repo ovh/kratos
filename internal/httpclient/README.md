@@ -110,6 +110,7 @@ Class | Method | HTTP request | Description
 *V0alpha2Api* | [**InitializeSelfServiceRecoveryFlowWithoutBrowser**](docs/V0alpha2Api.md#initializeselfservicerecoveryflowwithoutbrowser) | **Get** /self-service/recovery/api | Initialize Recovery Flow for APIs, Services, Apps, ...
 *V0alpha2Api* | [**InitializeSelfServiceRegistrationFlowForBrowsers**](docs/V0alpha2Api.md#initializeselfserviceregistrationflowforbrowsers) | **Get** /self-service/registration/browser | Initialize Registration Flow for Browsers
 *V0alpha2Api* | [**InitializeSelfServiceRegistrationFlowWithoutBrowser**](docs/V0alpha2Api.md#initializeselfserviceregistrationflowwithoutbrowser) | **Get** /self-service/registration/api | Initialize Registration Flow for APIs, Services, Apps, ...
+*V0alpha2Api* | [**InitializeSelfServiceSamlFlowForBrowsers**](docs/V0alpha2Api.md#initializeselfservicesamlflowforbrowsers) | **Get** /self-service/methods/saml/auth | Initialize Registration Flow for APIs, Services, Apps, ...
 *V0alpha2Api* | [**InitializeSelfServiceSettingsFlowForBrowsers**](docs/V0alpha2Api.md#initializeselfservicesettingsflowforbrowsers) | **Get** /self-service/settings/browser | Initialize Settings Flow for Browsers
 *V0alpha2Api* | [**InitializeSelfServiceSettingsFlowWithoutBrowser**](docs/V0alpha2Api.md#initializeselfservicesettingsflowwithoutbrowser) | **Get** /self-service/settings/api | Initialize Settings Flow for APIs, Services, Apps, ...
 *V0alpha2Api* | [**InitializeSelfServiceVerificationFlowForBrowsers**](docs/V0alpha2Api.md#initializeselfserviceverificationflowforbrowsers) | **Get** /self-service/verification/browser | Initialize Verification Flow for Browser Clients
@@ -169,6 +170,7 @@ Class | Method | HTTP request | Description
  - [SelfServiceRecoveryFlowState](docs/SelfServiceRecoveryFlowState.md)
  - [SelfServiceRecoveryLink](docs/SelfServiceRecoveryLink.md)
  - [SelfServiceRegistrationFlow](docs/SelfServiceRegistrationFlow.md)
+ - [SelfServiceSamlUrl](docs/SelfServiceSamlUrl.md)
  - [SelfServiceSettingsFlow](docs/SelfServiceSettingsFlow.md)
  - [SelfServiceSettingsFlowState](docs/SelfServiceSettingsFlowState.md)
  - [SelfServiceVerificationFlow](docs/SelfServiceVerificationFlow.md)
