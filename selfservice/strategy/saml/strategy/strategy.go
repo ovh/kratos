@@ -286,8 +286,6 @@ func (s *Strategy) handleError(w http.ResponseWriter, r *http.Request, f flow.Fl
 		}
 
 		return err
-	case *settings.Flow:
-		return err
 	}
 
 	return err

@@ -27,11 +27,19 @@ func (s *Strategy) processLoginOrRegister(w http.ResponseWriter, r *http.Request
 			// The user doesn't net existe yet so we register him
 			registerFlow, err := s.d.RegistrationHandler().NewRegistrationFlow(w, r, flow.TypeBrowser)
 			if err != nil {
-				return nil, s.handleError(w, r, registerFlow, provider.Config().ID, i.Traits, err)
+				if i == nil {
+					return nil, s.handleError(w, r, registerFlow, provider.Config().ID, nil, err)
+				} else {
+					return nil, s.handleError(w, r, registerFlow, provider.Config().ID, i.Traits, err)
+				}
 			}
 
 			if err = s.processRegistration(w, r, registerFlow, provider, claims); err != nil {
-				return nil, s.handleError(w, r, registerFlow, provider.Config().ID, i.Traits, err)
+				if i == nil {
+					return nil, s.handleError(w, r, registerFlow, provider.Config().ID, nil, err)
+				} else {
+					return nil, s.handleError(w, r, registerFlow, provider.Config().ID, i.Traits, err)
+				}
 			}
 
 			return nil, nil
