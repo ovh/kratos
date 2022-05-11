@@ -38,6 +38,10 @@
               "type": "string"
             }
           }
+        },
+        "roles": {
+          "title": "Roles",
+            "type": "array"
         }
       },
       "required": [

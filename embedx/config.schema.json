@@ -445,79 +445,68 @@
           "properties": {
             "id": {
               "title": "ID",
-              "description": "The name of the IDP attribute that will represent the user ID on Kratos",
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user ID on Kratos",
               "type": "string",
               "examples": [
-                "file://path/to/oidc.jsonnet",
-                "https://foo.bar.com/path/to/oidc.jsonnet",
-                "base64://bG9jYWwgc3ViamVjdCA9I..."
+                "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn"
               ]
             },
             "firstname": {
               "title": "Firstname",
-              "description": "The name of the IDP attribute that will represent the user's firstname on Kratos",
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's firstname on Kratos",
               "type": "string",
               "examples": [
-                "John"
+                "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
               ]
             },
             "lastname": {
               "title": "Lastname",
-              "description": "The name of the IDP attribute that will represent the user's lastname on Kratos",
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's lastname on Kratos",
               "type": "string",
               "examples": [
-                "Doe"
+                "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
               ]
             },
             "nickname": {
               "title": "Nickname",
-              "description": "The name of the IDP attribute that will represent the user's username on Kratos",
-              "type": "string",
-              "examples": [
-                "JohnDoe1337"
-              ]
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's username on Kratos",
+              "type": "string"
             },
             "gender": {
               "title": "Gender",
-              "description": "The name of the IDP attribute that will represent the user's gender on Kratos",
-              "type": "string",
-              "examples": [
-                "Male",
-                "Female",
-                "Non-binary"
-              ]
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's gender on Kratos",
+              "type": "string"
             },
             "birthdate": {
               "title": "Birthdate",
-              "description": "The name of the IDP attribute that will represent the user's birthdate on Kratos",
-              "type": "string",
-              "examples": [
-                "08/23/1978"
-              ]
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's birthdate on Kratos",
+              "type": "string"
             },
             "picture": {
               "title": "Picture",
-              "description": "The name of the IDP attribute that will represent the user's picture on Kratos",
-              "type": "string",
-              "examples": [
-                "https://imagepicture.jpg"
-              ]
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's picture on Kratos",
+              "type": "string"
             },
             "email": {
               "title": "Email",
-              "description": "The name of the IDP attribute that will represent the user's email on Kratos",
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's email on Kratos",
               "type": "string",
               "examples": [
-                "john.doe@gmail.com"
+                "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+              ]
+            },
+            "roles": {
+              "title": "Roles",
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's roles on Kratos",
+              "type": "string",
+              "examples" : [
+                "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
               ]
             },
             "phone_number": {
               "title": "Phone Number",
-              "description": "The name of the IDP attribute that will represent the user's phone number on Kratos",
-              "type": "string",
-              "examples": [
-                "+33678984320"
-              ]
+              "description": "The name of the IDP SAML Assertion attribute that will represent the user's phone number on Kratos",
+              "type": "string"
             }
           }
         }

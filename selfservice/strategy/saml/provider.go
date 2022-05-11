@@ -38,4 +38,6 @@ type Claims struct {
 	UpdatedAt           int64                `json:"updated_at,omitempty"`
 	HD                  string               `json:"hd,omitempty"`
 	Team                string               `json:"team,omitempty"`
+	Roles               []string             `json:"roles,omitempty"`
+	Groups              []string             `json:"groups,omitempty"`
 }
