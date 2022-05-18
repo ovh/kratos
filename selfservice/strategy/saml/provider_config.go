@@ -30,5 +30,4 @@ type ConfigurationCollection struct {
 
 func (c ConfigurationCollection) Provider(id string, label string) (Provider, error) {
 	return NewProviderSAML(id, label, &c.SAMLProviders[len(c.SAMLProviders)-1]), nil
-
 }

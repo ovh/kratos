@@ -10,6 +10,7 @@ import (
 
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
+	"github.com/gofrs/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 	"github.com/tidwall/gjson"
@@ -108,11 +109,24 @@ func uid(provider, subject string) string {
 	return fmt.Sprintf("%s:%s", provider, subject)
 }
 
+func isForced(req interface{}) bool {
+	f, ok := req.(interface {
+		IsForced() bool
+	})
+	return ok && f.IsForced()
+}
+
 type Strategy struct {
 	d  registrationStrategyDependencies
 	f  *fetcher.Fetcher
 	v  *validator.Validate
 	hd *decoderx.HTTP
+}
+
+type authCodeContainer struct {
+	FlowID string          `json:"flow_id"`
+	State  string          `json:"state"`
+	Traits json.RawMessage `json:"traits"`
 }
 
 func NewStrategy(d registrationStrategyDependencies) *Strategy {
@@ -161,6 +175,67 @@ func (s *Strategy) GetAttributesFromAssertion(assertion *saml.Assertion) (map[st
 	}
 
 	return attributes, nil
+}
+
+func (s *Strategy) validateFlow(ctx context.Context, r *http.Request, rid uuid.UUID) (flow.Flow, error) {
+	if x.IsZeroUUID(rid) {
+		return nil, errors.WithStack(herodot.ErrBadRequest.WithReason("The session cookie contains invalid values and the flow could not be executed. Please try again."))
+	}
+
+	if ar, err := s.d.RegistrationFlowPersister().GetRegistrationFlow(ctx, rid); err == nil {
+		if ar.Type != flow.TypeBrowser {
+			return ar, samlstrategy.ErrAPIFlowNotSupported
+		}
+
+		if err := ar.Valid(); err != nil {
+			return ar, err
+		}
+		return ar, nil
+	}
+
+	if ar, err := s.d.LoginFlowPersister().GetLoginFlow(ctx, rid); err == nil {
+		if ar.Type != flow.TypeBrowser {
+			return ar, samlstrategy.ErrAPIFlowNotSupported
+		}
+
+		if err := ar.Valid(); err != nil {
+			return ar, err
+		}
+		return ar, nil
+	}
+
+	ar, err := s.d.SettingsFlowPersister().GetSettingsFlow(ctx, rid)
+	if err == nil {
+		if ar.Type != flow.TypeBrowser {
+			return ar, samlstrategy.ErrAPIFlowNotSupported
+		}
+
+		sess, err := s.d.SessionManager().FetchFromRequest(ctx, r)
+		if err != nil {
+			return ar, err
+		}
+
+		if err := ar.Valid(sess); err != nil {
+			return ar, err
+		}
+		return ar, nil
+	}
+
+	return ar, err // this must return the error
+}
+
+func (s *Strategy) alreadyAuthenticated(w http.ResponseWriter, r *http.Request, req interface{}) bool {
+	// we assume an error means the user has no session
+	if _, err := s.d.SessionManager().FetchFromRequest(r.Context(), r); err == nil {
+		if _, ok := req.(*settings.Flow); ok {
+			// ignore this if it's a settings flow
+		} else if !isForced(req) {
+			http.Redirect(w, r, s.d.Config(r.Context()).SelfServiceBrowserDefaultReturnTo().String(), http.StatusSeeOther)
+			return true
+		}
+	}
+
+	return false
 }
 
 // Handle /selfservice/methods/saml/acs | Receive SAML response, parse the attributes and start auth flow
@@ -244,14 +319,14 @@ func (s *Strategy) Config(ctx context.Context) (*samlstrategy.ConfigurationColle
 }
 
 func (s *Strategy) populateMethod(r *http.Request, c *container.Container, message func(provider string) *text.Message) error {
-	_, err := s.Config(r.Context())
+	conf, err := s.Config(r.Context())
 	if err != nil {
 		return err
 	}
 
 	// does not need sorting because there is only one field
 	c.SetCSRF(s.d.GenerateCSRFToken(r))
-	// AddSamlProviders(c, conf.Providers, message)
+	AddProviders(c, conf.SAMLProviders, message)
 
 	return nil
 }
@@ -318,6 +393,7 @@ func (s *Strategy) CountActiveCredentials(cc map[identity.CredentialsType]identi
 func (s *Strategy) CountActiveFirstFactorCredentials(cc map[identity.CredentialsType]identity.Credentials) (count int, err error) {
 	for _, c := range cc {
 		if c.Type == s.ID() && gjson.ValidBytes(c.Config) {
+			// TODO MANAGE THIS
 			var conf identity.CredentialsOIDC
 			if err = json.Unmarshal(c.Config, &conf); err != nil {
 				return 0, errors.WithStack(err)

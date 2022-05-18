@@ -9,6 +9,8 @@ import (
 	"github.com/google/go-jsonnet"
 	"github.com/ory/kratos/driver/config"
 	"github.com/ory/kratos/identity"
+	"github.com/ory/x/decoderx"
+	"github.com/pkg/errors"
 
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/selfservice/flow/registration"
@@ -16,6 +18,7 @@ import (
 	"github.com/ory/kratos/text"
 
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/ory/kratos/x"
 )
@@ -127,6 +130,35 @@ func (s *Strategy) PopulateRegistrationMethod(r *http.Request, f *registration.F
 	}
 
 	return s.populateMethod(r, f.UI, text.NewInfoRegistrationWith)
+}
+
+func (s *Strategy) newLinkDecoder(p interface{}, r *http.Request) error {
+	ds, err := s.d.Config(r.Context()).DefaultIdentityTraitsSchemaURL()
+	if err != nil {
+		return err
+	}
+
+	raw, err := sjson.SetBytes(linkSchema, "properties.traits.$ref", ds.String()+"#/properties/traits")
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	compiler, err := decoderx.HTTPRawJSONSchemaCompiler(raw)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	if err := s.hd.Decode(r, &p, compiler,
+		decoderx.HTTPKeepRequestBody(true),
+		decoderx.HTTPDecoderSetValidatePayloads(false),
+		decoderx.HTTPDecoderUseQueryAndBody(),
+		decoderx.HTTPDecoderAllowedMethods("POST", "GET"),
+		decoderx.HTTPDecoderJSONFollowsFormFormat(),
+	); err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
 }
 
 // Method not used but necessary to implement the interface

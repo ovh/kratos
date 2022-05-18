@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 
 	"github.com/ory/kratos/identity"
+	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/container"
 	"github.com/ory/kratos/ui/node"
 	"github.com/ory/kratos/x"
+	"github.com/ory/x/stringsx"
 
 	"github.com/pkg/errors"
 )
@@ -38,15 +40,22 @@ func NewCredentialsForSAML(subject string, provider string) (*identity.Credentia
 	}, nil
 }
 
+func AddProviders(c *container.Container, providers []saml.Configuration, message func(provider string) *text.Message) {
+	for _, p := range providers {
+		AddProvider(c, p.ID, message(
+			stringsx.Coalesce(p.Label, p.ID)))
+	}
+}
+
 func AddProvider(c *container.Container, providerID string, message *text.Message) {
 	c.GetNodes().Append(
-		node.NewInputField("provider", providerID, node.SAMLGroup, node.InputAttributeTypeSubmit).WithMetaLabel(message),
+		node.NewInputField("samlProvider", providerID, node.SAMLGroup, node.InputAttributeTypeSubmit).WithMetaLabel(message),
 	)
 }
 
 type ProviderCredentialsConfig struct {
 	Subject  string `json:"subject"`
-	Provider string `json:"provider"`
+	Provider string `json:"samlProvider"`
 }
 
 type FlowMethod struct {
