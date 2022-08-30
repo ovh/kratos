@@ -39,6 +39,7 @@ const (
 	DefaultGroup       UiNodeGroup = "default"
 	PasswordGroup      UiNodeGroup = "password"
 	OpenIDConnectGroup UiNodeGroup = "oidc"
+	SAMLGroup          UiNodeGroup = "saml"
 	ProfileGroup       UiNodeGroup = "profile"
 	LinkGroup          UiNodeGroup = "link"
 	TOTPGroup          UiNodeGroup = "totp"

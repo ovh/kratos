@@ -37,11 +37,13 @@ import (
 	"github.com/ory/kratos/hash"
 	"github.com/ory/kratos/schema"
 	"github.com/ory/kratos/selfservice/flow/recovery"
+	"github.com/ory/kratos/selfservice/flow/saml"
 	"github.com/ory/kratos/selfservice/flow/settings"
 	"github.com/ory/kratos/selfservice/flow/verification"
 	"github.com/ory/kratos/selfservice/hook"
 	"github.com/ory/kratos/selfservice/strategy/link"
 	"github.com/ory/kratos/selfservice/strategy/profile"
+	samlstrategy "github.com/ory/kratos/selfservice/strategy/saml/strategy"
 	"github.com/ory/kratos/x"
 
 	"github.com/cenkalti/backoff"
@@ -101,6 +103,9 @@ type RegistryDefault struct {
 
 	continuityManager continuity.Manager
 
+	x.RelayStateProvider
+	session.ManagementProvider
+
 	schemaHandler *schema.Handler
 
 	sessionHandler *session.Handler
@@ -122,6 +127,8 @@ type RegistryDefault struct {
 	selfserviceLoginExecutor            *login.HookExecutor
 	selfserviceLoginHandler             *login.Handler
 	selfserviceLoginRequestErrorHandler *login.ErrorHandler
+
+	selfserviceSAMLHandler *saml.Handler
 
 	selfserviceSettingsHandler      *settings.Handler
 	selfserviceSettingsErrorHandler *settings.ErrorHandler
@@ -155,6 +162,7 @@ func (m *RegistryDefault) Audit() *logrusx.Logger {
 
 func (m *RegistryDefault) RegisterPublicRoutes(ctx context.Context, router *x.RouterPublic) {
 	m.LoginHandler().RegisterPublicRoutes(router)
+	m.SAMLHandler().RegisterPublicRoutes(router)
 	m.RegistrationHandler().RegisterPublicRoutes(router)
 	m.LogoutHandler().RegisterPublicRoutes(router)
 	m.SettingsHandler().RegisterPublicRoutes(router)
@@ -284,6 +292,7 @@ func (m *RegistryDefault) selfServiceStrategies() []interface{} {
 		m.selfserviceStrategies = []interface{}{
 			password2.NewStrategy(m),
 			oidc.NewStrategy(m),
+			samlstrategy.NewStrategy(m),
 			profile.NewStrategy(m),
 			link.NewStrategy(m),
 			totp.NewStrategy(m),
@@ -616,8 +625,21 @@ func (m *RegistryDefault) Courier(ctx context.Context) courier.Courier {
 }
 
 func (m *RegistryDefault) ContinuityManager() continuity.Manager {
-	if m.continuityManager == nil {
+	// If m.continuityManager is nil or not a continuity.ManagerCookie
+	switch m.continuityManager.(type) {
+	case *continuity.ManagerCookie:
+	default:
 		m.continuityManager = continuity.NewManagerCookie(m)
+	}
+	return m.continuityManager
+}
+
+func (m *RegistryDefault) RelayStateContinuityManager() continuity.Manager {
+	// If m.continuityManager is nil or not a continuity.ManagerRelayState
+	switch m.continuityManager.(type) {
+	case *continuity.ManagerRelayState:
+	default:
+		m.continuityManager = continuity.NewManagerRelayState(m, m)
 	}
 	return m.continuityManager
 }

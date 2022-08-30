@@ -1267,6 +1267,33 @@ paths:
       summary: Create a Logout URL for Browsers
       tags:
       - v0alpha2
+  /self-service/methods/saml/auth:
+    get:
+      description: |-
+        Initiates and performs the SAML authentication request to the identity provider
+      operationId: initializeSelfServiceSamlFlowForBrowsers
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/selfServiceRegistrationFlow'
+          description: selfServiceRegistrationFlow
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonError'
+          description: jsonError
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/jsonError'
+          description: jsonError
+      summary: Initialize Registration Flow for APIs, Services, Apps, ...
+      tags:
+      - v0alpha2
   /self-service/recovery:
     post:
       description: |-
@@ -4070,6 +4097,24 @@ components:
       - request_url
       - type
       - ui
+      type: object
+    selfServiceSamlUrl:
+      properties:
+        saml_acs_url:
+          description: |-
+            SamlAcsURL is a post endpoint to handle SAML Response
+
+            format: uri
+          type: string
+        saml_metadata_url:
+          description: |-
+            SamlMetadataURL is a get endpoint to get the metadata
+
+            format: uri
+          type: string
+      required:
+      - saml_acs_url
+      - saml_metadata_url
       type: object
     selfServiceSettingsFlow:
       description: |-
