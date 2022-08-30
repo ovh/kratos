@@ -26,6 +26,11 @@ type CookieProvider interface {
 	ContinuityCookieManager(ctx context.Context) sessions.StoreExact
 }
 
+type RelayStateProvider interface {
+	RelayStateManager(ctx context.Context) sessions.StoreExact
+	ContinuityRelayStateManager(ctx context.Context) sessions.StoreExact
+}
+
 type TracingProvider interface {
 	Tracer(ctx context.Context) *otelx.Tracer
 }
