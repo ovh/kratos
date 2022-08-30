@@ -132,7 +132,8 @@ func (s *ErrorHandler) WriteFlowError(
 	}
 
 	if f.Type == flow.TypeBrowser && !x.IsJSONRequest(r) {
-		http.Redirect(w, r, f.AppendTo(s.d.Config().SelfServiceFlowRegistrationUI(r.Context())).String(), http.StatusFound)
+		redirectLocation := f.AppendTo(s.d.Config().SelfServiceFlowRegistrationUI(r.Context())).String()
+		http.Redirect(w, r, redirectLocation, http.StatusFound)
 		return
 	}
 	if _, hasCode, _ := s.d.SessionTokenExchangePersister().CodeForFlow(r.Context(), f.ID); group == node.OpenIDConnectGroup && f.Type == flow.TypeAPI && hasCode {

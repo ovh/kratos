@@ -122,7 +122,8 @@ func (s *ErrorHandler) WriteFlowError(w http.ResponseWriter, r *http.Request, f 
 	}
 
 	if f.Type == flow.TypeBrowser && !x.IsJSONRequest(r) {
-		http.Redirect(w, r, f.AppendTo(s.d.Config().SelfServiceFlowLoginUI(r.Context())).String(), http.StatusSeeOther)
+		redirectLocation := f.AppendTo(s.d.Config().SelfServiceFlowLoginUI(r.Context())).String()
+		http.Redirect(w, r, redirectLocation, http.StatusSeeOther)
 		return
 	}
 

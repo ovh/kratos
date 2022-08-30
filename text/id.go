@@ -76,6 +76,8 @@ const (
 	InfoSelfServiceSettingsRemoveWebAuthn
 	InfoSelfServiceSettingsRegisterPasskey
 	InfoSelfServiceSettingsRemovePasskey
+	InfoSelfServiceSettingsUpdateLinkSAML
+	InfoSelfServiceSettingsUpdateUnlinkSAML
 )
 
 const (
@@ -148,6 +150,7 @@ const (
 	ErrorValidationPasswordTooManyBreaches
 	ErrorValidationNoCodeUser
 	ErrorValidationTraitsMismatch
+	ErrorValidationSAMLProviderNotFound
 )
 
 const (

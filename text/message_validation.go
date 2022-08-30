@@ -416,3 +416,11 @@ func NewErrorValidationTraitsMismatch() *Message {
 		Type: Error,
 	}
 }
+
+func NewErrorValidationSAMLProviderNotFound() *Message {
+	return &Message{
+		ID:   ErrorValidationSAMLProviderNotFound,
+		Text: "SAML Provider is unknown or has not been configured",
+		Type: Error,
+	}
+}

@@ -25,6 +25,10 @@ type Strategy interface {
 	CompletedAuthenticationMethod(ctx context.Context, methods session.AuthenticationMethods) session.AuthenticationMethod
 }
 
+type AdminHandler interface {
+	RegisterAdminLoginRoutes(admin *x.RouterAdmin)
+}
+
 type Strategies []Strategy
 
 type LinkableStrategy interface {
@@ -58,6 +62,14 @@ func (s Strategies) RegisterPublicRoutes(r *x.RouterPublic) {
 }
 
 type StrategyFilter func(strategy Strategy) bool
+
+func (s Strategies) RegisterAdminRoutes(r *x.RouterAdmin) {
+	for _, ss := range s {
+		if h, ok := ss.(AdminHandler); ok {
+			h.RegisterAdminLoginRoutes(r)
+		}
+	}
+}
 
 type StrategyProvider interface {
 	AllLoginStrategies() Strategies

@@ -374,7 +374,7 @@ func (s *ManagerHTTP) MaybeRedirectAPICodeFlow(w http.ResponseWriter, r *http.Re
 	ctx, span := s.r.Tracer(r.Context()).Tracer().Start(r.Context(), "sessions.ManagerHTTP.MaybeRedirectAPICodeFlow")
 	defer otelx.End(span, &err)
 
-	if uiNode != node.OpenIDConnectGroup {
+	if uiNode != node.OpenIDConnectGroup && uiNode != node.SAMLGroup {
 		return false, nil
 	}
 

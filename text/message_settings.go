@@ -207,3 +207,22 @@ func NewInfoSelfServiceRemovePasskey(name string, createdAt time.Time) *Message 
 		}),
 	}
 }
+
+func NewInfoSelfServiceSettingsUpdateLinkSAML() *Message {
+	return &Message{
+		ID:   InfoSelfServiceSettingsUpdateLinkSAML,
+		Text: "Link SAML",
+		Type: Info,
+	}
+}
+
+func NewInfoSelfServiceSettingsUpdateUnlinkSAML(provider string) *Message {
+	return &Message{
+		ID:   InfoSelfServiceSettingsUpdateUnlinkSAML,
+		Text: fmt.Sprintf("Unlink %s", provider),
+		Type: Info,
+		Context: context(map[string]interface{}{
+			"provider": provider,
+		}),
+	}
+}

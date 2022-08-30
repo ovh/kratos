@@ -6,11 +6,10 @@ package flow
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/url"
-
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
+	"net/http"
+	"net/url"
 
 	"github.com/ory/herodot"
 	"github.com/ory/kratos/driver/config"

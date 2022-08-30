@@ -177,6 +177,9 @@ func init() {
 		"NewErrorValidationAddressUnknown":                        text.NewErrorValidationAddressUnknown(),
 		"NewInfoSelfServiceLoginCodeMFA":                          text.NewInfoSelfServiceLoginCodeMFA(),
 		"NewInfoSelfServiceLoginCodeMFAHint":                      text.NewInfoSelfServiceLoginCodeMFAHint("{maskedIdentifier}"),
+		"NewInfoSelfServiceSettingsUpdateLinkSAML":                text.NewInfoSelfServiceSettingsUpdateLinkSAML(),
+		"NewInfoSelfServiceSettingsUpdateUnlinkSAML":              text.NewInfoSelfServiceSettingsUpdateUnlinkSAML("{provider}"),
+		"NewErrorValidationSAMLProviderNotFound":                  text.NewErrorValidationSAMLProviderNotFound(),
 	}
 }
 

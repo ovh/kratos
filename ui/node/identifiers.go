@@ -43,3 +43,7 @@ const (
 	PasskeyLoginTrigger     = "passkey_login_trigger" //#nosec G101 -- Not a credential
 	PasskeyRemove           = "passkey_remove"
 )
+
+const (
+	LoginAndLinkCredentials = "login_and_link_credentials"
+)

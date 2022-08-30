@@ -329,14 +329,22 @@ require (
 )
 
 require (
+	github.com/beevik/etree v1.4.0
 	github.com/coreos/go-oidc/v3 v3.9.0
+	github.com/crewjam/saml v0.4.14
 	github.com/dghubble/oauth1 v0.7.2
 	github.com/lestrrat-go/jwx/v2 v2.0.19
+	github.com/russellhaering/goxmldsig v1.4.0
+	gotest.tools v2.2.0+incompatible
 )
 
 require (
+	github.com/crewjam/httperr v0.2.0 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/jackc/puddle/v2 v2.1.2 // indirect
+	github.com/jonboulle/clockwork v0.2.2 // indirect
 	github.com/lestrrat-go/httprc v1.0.4 // indirect
+	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 )

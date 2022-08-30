@@ -1,0 +1,139 @@
+[
+  {
+    "type": "input",
+    "group": "saml",
+    "attributes": {
+      "name": "samlUnlink",
+      "type": "submit",
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {
+      "label": {
+        "id": 1050022,
+        "text": "Unlink TestSettingsStrategyProvider",
+        "type": "info",
+        "context": {
+          "provider": "TestSettingsStrategyProvider"
+        }
+      }
+    }
+  },
+  {
+    "type": "input",
+    "group": "saml",
+    "attributes": {
+      "name": "samlLink",
+      "type": "submit",
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {
+      "label": {
+        "id": 1050021,
+        "text": "Link SAML",
+        "type": "info"
+      }
+    }
+  },
+  {
+    "type": "input",
+    "group": "default",
+    "attributes": {
+      "name": "csrf_token",
+      "type": "hidden",
+      "required": true,
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {}
+  },
+  {
+    "type": "input",
+    "group": "profile",
+    "attributes": {
+      "name": "traits.email",
+      "type": "email",
+      "value": "user1@example.com",
+      "required": true,
+      "autocomplete": "email",
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {}
+  },
+  {
+    "type": "input",
+    "group": "profile",
+    "attributes": {
+      "name": "traits.name",
+      "type": "text",
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {}
+  },
+  {
+    "type": "input",
+    "group": "profile",
+    "attributes": {
+      "name": "method",
+      "type": "submit",
+      "value": "profile",
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {
+      "label": {
+        "id": 1070003,
+        "text": "Save",
+        "type": "info"
+      }
+    }
+  },
+  {
+    "type": "input",
+    "group": "password",
+    "attributes": {
+      "name": "password",
+      "type": "password",
+      "required": true,
+      "autocomplete": "new-password",
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {
+      "label": {
+        "id": 1070001,
+        "text": "Password",
+        "type": "info"
+      }
+    }
+  },
+  {
+    "type": "input",
+    "group": "password",
+    "attributes": {
+      "name": "method",
+      "type": "submit",
+      "value": "password",
+      "disabled": false,
+      "node_type": "input"
+    },
+    "messages": [],
+    "meta": {
+      "label": {
+        "id": 1070003,
+        "text": "Save",
+        "type": "info"
+      }
+    }
+  }
+]

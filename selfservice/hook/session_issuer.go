@@ -5,9 +5,8 @@ package hook
 
 import (
 	"context"
-	"net/http"
-
 	"go.opentelemetry.io/otel/trace"
+	"net/http"
 
 	"github.com/ory/kratos/identity"
 	"github.com/ory/kratos/ui/node"
@@ -28,6 +27,7 @@ var _ registration.PostHookPostPersistExecutor = new(SessionIssuer)
 
 type (
 	sessionIssuerDependencies interface {
+		config.Provider
 		session.ManagementProvider
 		session.PersistenceProvider
 		sessiontokenexchange.PersistenceProvider
@@ -58,6 +58,13 @@ func (e *SessionIssuer) executePostRegistrationPostPersistHook(w http.ResponseWr
 		// This is the case for Sign in with native Apple SDK or Google SDK.
 		if s.AuthenticatedVia(identity.CredentialsTypeOIDC) && a.IDToken == "" {
 			if handled, err := e.r.SessionManager().MaybeRedirectAPICodeFlow(w, r, a, s.ID, node.OpenIDConnectGroup); err != nil {
+				return errors.WithStack(err)
+			} else if handled {
+				return nil
+			}
+		}
+		if s.AuthenticatedVia(identity.CredentialsTypeSAML) {
+			if handled, err := e.r.SessionManager().MaybeRedirectAPICodeFlow(w, r, a, s.ID, node.SAMLGroup); err != nil {
 				return errors.WithStack(err)
 			} else if handled {
 				return nil

@@ -47,6 +47,7 @@ import (
 	"github.com/ory/kratos/selfservice/strategy/passkey"
 	"github.com/ory/kratos/selfservice/strategy/password"
 	"github.com/ory/kratos/selfservice/strategy/profile"
+	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/kratos/selfservice/strategy/totp"
 	"github.com/ory/kratos/selfservice/strategy/webauthn"
 	"github.com/ory/kratos/session"
@@ -125,6 +126,8 @@ type RegistryDefault struct {
 	selfserviceLoginHandler             *login.Handler
 	selfserviceLoginRequestErrorHandler *login.ErrorHandler
 
+	selfserviceSAMLHandler *saml.Handler
+
 	selfserviceSettingsHandler      *settings.Handler
 	selfserviceSettingsErrorHandler *settings.ErrorHandler
 	selfserviceSettingsExecutor     *settings.HookExecutor
@@ -172,6 +175,7 @@ func (m *RegistryDefault) Audit() *logrusx.Logger {
 
 func (m *RegistryDefault) RegisterPublicRoutes(ctx context.Context, router *x.RouterPublic) {
 	m.LoginHandler().RegisterPublicRoutes(router)
+	m.SAMLHandler().RegisterPublicRoutes(router)
 	m.RegistrationHandler().RegisterPublicRoutes(router)
 	m.LogoutHandler().RegisterPublicRoutes(router)
 	m.SettingsHandler().RegisterPublicRoutes(router)
@@ -206,6 +210,7 @@ func (m *RegistryDefault) RegisterAdminRoutes(ctx context.Context, router *x.Rou
 	m.RecoveryHandler().RegisterAdminRoutes(router)
 	m.AllRecoveryStrategies().RegisterAdminRoutes(router)
 	m.SessionHandler().RegisterAdminRoutes(router)
+	m.AllLoginStrategies().RegisterAdminRoutes(router)
 
 	m.VerificationHandler().RegisterAdminRoutes(router)
 	m.AllVerificationStrategies().RegisterAdminRoutes(router)
@@ -317,6 +322,7 @@ func (m *RegistryDefault) selfServiceStrategies() []any {
 			m.selfserviceStrategies = []any{
 				password.NewStrategy(m),
 				oidc.NewStrategy(m),
+				saml.NewStrategy(m),
 				profile.NewStrategy(m),
 				code.NewStrategy(m),
 				link.NewStrategy(m),
