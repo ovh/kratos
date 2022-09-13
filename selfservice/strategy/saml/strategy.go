@@ -277,6 +277,7 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 	m, err := GetMiddleware(pid)
 	if err != nil {
 		s.forwardError(w, r, err)
+		return
 	}
 
 	// We get the possible SAML request IDs
@@ -284,6 +285,7 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 	assertion, err := m.ServiceProvider.ParseResponse(r, possibleRequestIDs)
 	if err != nil {
 		s.forwardError(w, r, err)
+		return
 	}
 
 	// We get the user's attributes from the SAML Response (assertion)

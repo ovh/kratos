@@ -8,6 +8,14 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"encoding/xml"
+	"fmt"
+	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
+	"github.com/ory/kratos/driver"
+	"github.com/ory/x/logrusx"
+	"github.com/ory/x/resilience"
+	"github.com/phayes/freeport"
+	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -40,6 +48,64 @@ var RandReader = rand.Reader
 func ViperSetProviderConfig(t *testing.T, conf *config.Config, SAMLProvider ...saml.Configuration) {
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &saml.ConfigurationCollection{SAMLProviders: SAMLProvider})
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".enabled", true)
+}
+
+func newReturnTs(t *testing.T, reg driver.Registry) *httptest.Server {
+	ctx := context.Background()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess, err := reg.SessionManager().FetchFromRequest(r.Context(), r)
+		require.NoError(t, err)
+		require.Empty(t, sess.Identity.Credentials)
+		reg.Writer().Write(w, r, sess)
+	}))
+	reg.Config().MustSet(ctx, config.ViperKeySelfServiceBrowserDefaultReturnTo, ts.URL)
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func newIDP(t *testing.T, SPentityID string, SPACS string) string {
+	publicPort, err := freeport.GetFreePort()
+	require.NoError(t, err)
+
+	//metadataFile, err := filepath.Abs("./testdata/saml20-idp-remote.php")
+	require.NoError(t, err)
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	serviceIDP, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "kristophjunge/test-saml-idp",
+		Tag:        "1.15",
+		Env: []string{
+			"SIMPLESAMLPHP_SP_ENTITY_ID=" + SPentityID,
+			"SIMPLESAMLPHP_SP_ASSERTION_CONSUMER_SERVICE=" + SPACS,
+		},
+		//Mounts:       []string{fmt.Sprintf("%s:/var/www/simplesamlphp/metadata/saml20-idp-remote.php", metadataFile)},
+		ExposedPorts: []string{"8080/tcp"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"8080/tcp": {{HostPort: fmt.Sprintf("%d/tcp", publicPort)}},
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, serviceIDP.Close())
+	})
+	require.NoError(t, serviceIDP.Expire(uint(60*5)))
+
+	require.NotEmpty(t, serviceIDP.GetPort("8080/tcp"), "%+v", serviceIDP.Container.NetworkSettings.Ports)
+
+	remote := "http://127.0.0.1:" + serviceIDP.GetPort("8080/tcp")
+
+	t.Logf("SAML IdP running at: %s", remote)
+
+	require.NoError(t, resilience.Retry(logrusx.New("", ""), time.Second*10, time.Minute*2, func() error {
+		if req, err := http.NewRequest("GET", remote+"/simplesaml/saml2/idp/metadata.php", nil); err != nil {
+			return err
+		} else if _, err := http.DefaultClient.Do(req); err != nil {
+			return err
+		}
+		return nil
+	}))
+
+	return remote
 }
 
 func NewTestClient(t *testing.T, jar *cookiejar.Jar) *http.Client {
@@ -103,7 +169,7 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	ts, _ := testhelpers.NewKratosServerWithRouters(t, reg, routerP, routerA)
 
 	attributesMap := make(map[string]string)
-	attributesMap["id"] = "mail"
+	attributesMap["id"] = "urn:oid:1.3.6.1.4.1.5923.1.1.1.6"
 	attributesMap["firstname"] = "givenName"
 	attributesMap["lastname"] = "sn"
 	attributesMap["email"] = "mail"
@@ -183,4 +249,48 @@ func GetAndDecryptAssertion(t *testing.T, samlResponseFile string, key *rsa.Priv
 	require.NoError(t, err)
 
 	return assertion, err
+}
+
+func traverse(n *html.Node, name string) *html.Node {
+
+	if checkName(n, name) {
+		return n
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+
+		res := traverse(c, name)
+
+		if res != nil {
+			return res
+		}
+	}
+
+	return nil
+}
+
+func checkName(n *html.Node, name string) bool {
+
+	if n.Type == html.ElementNode {
+
+		s, ok := getAttribute(n, "name")
+
+		if ok && s == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func getAttribute(n *html.Node, key string) (string, bool) {
+
+	for _, attr := range n.Attr {
+
+		if attr.Key == key {
+			return attr.Val, true
+		}
+	}
+
+	return "", false
 }

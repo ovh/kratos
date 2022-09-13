@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/ory/herodot"
+
 	"github.com/crewjam/saml/samlsp"
 	"github.com/pkg/errors"
 
@@ -43,9 +45,14 @@ func (d *ProviderSAML) Claims(ctx context.Context, config *config.Config, attrib
 		return nil, err
 	}
 
+	subject := attributeSAML.Get(providerConfig.AttributesMap["id"])
+	if subject == "" {
+		return nil, errors.WithStack(herodot.ErrInternalServerError.WithReason(
+			"The 'id' attribute not found. Check attributes map in SAML config."))
+	}
 	claims := &Claims{
 		Issuer:        "saml",
-		Subject:       attributeSAML.Get(providerConfig.AttributesMap["id"]),
+		Subject:       subject,
 		Name:          attributeSAML.Get(providerConfig.AttributesMap["firstname"]),
 		LastName:      attributeSAML.Get(providerConfig.AttributesMap["lastname"]),
 		Nickname:      attributeSAML.Get(providerConfig.AttributesMap["nickname"]),

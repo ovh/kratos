@@ -3,6 +3,7 @@ package saml
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/ory/x/urlx"
 	"net/http"
 	"time"
 
@@ -45,7 +46,7 @@ type SubmitSelfServiceLoginFlowWithSAMLMethodBody struct {
 
 	// Method to use
 	//
-	// This field must be set to `oidc` when using the oidc method.
+	// This field must be set to `saml` when using the saml method.
 	//
 	// required: true
 	Method string `json:"method"`
@@ -119,9 +120,12 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 	}
 
 	if x.IsJSONRequest(r) {
-		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(RouteBaseAuth))
+		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()),
+			RouteBaseAuth+"/"+pid).String()))
 	} else {
-		http.Redirect(w, r, RouteBaseAuth+"/"+pid, http.StatusSeeOther)
+		http.Redirect(w, r,
+			urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()), RouteBaseAuth+"/"+pid).String(),
+			http.StatusSeeOther)
 	}
 
 	return nil, errors.WithStack(flow.ErrCompletedByStrategy)

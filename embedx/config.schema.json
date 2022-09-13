@@ -565,6 +565,7 @@
       "required": [
         "id",
         "label",
+        "provider",
         "public_cert_path",
         "private_key_path",
         "mapper_url"
@@ -1233,6 +1234,15 @@
       "properties": {
         "default_browser_return_url": {
           "$ref": "#/definitions/defaultReturnTo"
+        },
+        "webview_redirect_uri": {
+          "type": "string",
+          "title": "Final webview redirect URI",
+          "description": "Mobile app should detect this webview redirect and read a session token from the response body.",
+          "format": "uri",
+          "examples": [
+            "https://auth.myexample.org/oidc/success"
+          ]
         },
         "allowed_return_urls": {
           "title": "Allowed Return To URLs",

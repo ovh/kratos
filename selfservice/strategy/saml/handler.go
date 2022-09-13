@@ -122,6 +122,7 @@ func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httpro
 	cookie, err := r.Cookie(continuity.CookieName)
 	if err != nil {
 		h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+		return
 	}
 	body, _ := ioutil.ReadAll(r.Body)
 	r2 := r.Clone(context.WithValue(r.Context(), ory_kratos_continuity{}, cookie.Value))
@@ -293,7 +294,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	}
 
 	// Crewjam library use default route for ACS and metadata but we want to overwrite them
-	metadata, err := url.Parse(publicUrlString + RouteMetadata)
+	metadata, err := url.Parse(publicUrlString + RouteBaseMetadata + "/" + pid)
 	if err != nil {
 		return herodot.ErrNotFound.WithTrace(err)
 	}
