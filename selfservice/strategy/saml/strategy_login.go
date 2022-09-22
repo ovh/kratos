@@ -1,4 +1,4 @@
-package strategy
+package saml
 
 import (
 	"bytes"
@@ -14,8 +14,6 @@ import (
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/selfservice/flow/login"
 	"github.com/ory/kratos/selfservice/flow/registration"
-	handler "github.com/ory/kratos/selfservice/flow/saml"
-	samlsp "github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/kratos/session"
 	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/node"
@@ -55,7 +53,7 @@ type SubmitSelfServiceLoginFlowWithSAMLMethodBody struct {
 }
 
 // Login and give a session to the user
-func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login.Flow, provider samlsp.Provider, c *identity.Credentials, i *identity.Identity, claims *samlsp.Claims) (*registration.Flow, error) {
+func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login.Flow, provider Provider, c *identity.Credentials, i *identity.Identity, claims *Claims) (*registration.Flow, error) {
 
 	var o CredentialsConfig
 	if err := json.NewDecoder(bytes.NewBuffer(c.Config)).Decode(&o); err != nil {
@@ -117,10 +115,10 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 	}
 
 	if x.IsJSONRequest(r) {
-		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(handler.RouteSamlLoginInit))
+		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(RouteSamlLoginInit))
 	} else {
 
-		http.Redirect(w, r, handler.RouteSamlLoginInit, http.StatusSeeOther)
+		http.Redirect(w, r, RouteSamlLoginInit, http.StatusSeeOther)
 	}
 
 	return nil, errors.WithStack(flow.ErrCompletedByStrategy)

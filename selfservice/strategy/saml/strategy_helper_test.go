@@ -1,4 +1,4 @@
-package helpertest
+package saml_test
 
 import (
 	"context"
@@ -29,22 +29,20 @@ import (
 	"github.com/ory/kratos/identity"
 	"github.com/ory/kratos/internal"
 	"github.com/ory/kratos/internal/testhelpers"
-	samlhandler "github.com/ory/kratos/selfservice/flow/saml"
-	samlstrategy "github.com/ory/kratos/selfservice/strategy/saml"
-	samlstrat "github.com/ory/kratos/selfservice/strategy/saml/strategy"
+	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/kratos/x"
 )
 
 var TimeNow = func() time.Time { return time.Now().UTC() }
 var RandReader = rand.Reader
 
-func NewSAMLProvider(
+func NewTestSAMLProvider(
 	t *testing.T,
 	kratos *httptest.Server,
 	id, label string,
-) samlstrategy.Configuration {
+) saml.Configuration {
 
-	return samlstrategy.Configuration{
+	return saml.Configuration{
 		ID:             id,
 		Label:          label,
 		PublicCertPath: "secret",
@@ -55,12 +53,12 @@ func NewSAMLProvider(
 	}
 }
 
-func ViperSetProviderConfig(t *testing.T, conf *config.Config, SAMLProvider ...samlstrategy.Configuration) {
-	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &samlstrategy.ConfigurationCollection{SAMLProviders: SAMLProvider})
+func ViperSetProviderConfig(t *testing.T, conf *config.Config, SAMLProvider ...saml.Configuration) {
+	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &saml.ConfigurationCollection{SAMLProviders: SAMLProvider})
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".enabled", true)
 }
 
-func NewClient(t *testing.T, jar *cookiejar.Jar) *http.Client {
+func NewTestClient(t *testing.T, jar *cookiejar.Jar) *http.Client {
 	if jar == nil {
 		j, err := cookiejar.New(nil)
 		jar = j
@@ -112,10 +110,10 @@ func mustParsePrivateKey(pemStr []byte) crypto.PrivateKey {
 	return k
 }
 
-func InitMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp.Middleware, *samlstrat.Strategy, *httptest.Server, error) {
+func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 
-	strategy := samlstrat.NewStrategy(reg)
+	strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
 	routerP := x.NewRouterPublic()
 	routerA := x.NewRouterAdmin()
@@ -131,8 +129,8 @@ func InitMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp.Mid
 	ViperSetProviderConfig(
 		t,
 		conf,
-		NewSAMLProvider(t, ts, "samlProviderTestID", "samlProviderTestLabel"),
-		samlstrategy.Configuration{
+		NewTestSAMLProvider(t, ts, "samlProviderTestID", "samlProviderTestLabel"),
+		saml.Configuration{
 			ID:             "samlProviderTestID",
 			Label:          "samlProviderTestLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
@@ -152,9 +150,9 @@ func InitMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp.Mid
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	// Instantiates the MiddleWare
-	_, err := NewClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	_, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
 	require.NoError(t, err)
-	middleware, err := samlhandler.GetMiddleware()
+	middleware, err := saml.GetMiddleware()
 	require.NoError(t, err)
 	middleware.ServiceProvider.Key = mustParsePrivateKey(golden.Get(t, "key.pem")).(*rsa.PrivateKey)
 	middleware.ServiceProvider.Certificate = mustParseCertificate(golden.Get(t, "cert.pem"))
@@ -162,15 +160,15 @@ func InitMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp.Mid
 	return middleware, strategy, ts, err
 }
 
-func InitMiddlewareWithMetadata(t *testing.T, metadataURL string) (*samlsp.Middleware, *samlstrat.Strategy, *httptest.Server, error) {
+func InitTestMiddlewareWithMetadata(t *testing.T, metadataURL string) (*samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
 	idpInformation := make(map[string]string)
 	idpInformation["idp_metadata_url"] = metadataURL
 
-	return InitMiddleware(t, idpInformation)
+	return InitTestMiddleware(t, idpInformation)
 }
 
-func InitMiddlewareWithoutMetadata(t *testing.T, idpSsoUrl string, idpEntityId string,
-	idpCertifiatePath string, idpLogoutUrl string) (*samlsp.Middleware, *samlstrat.Strategy, *httptest.Server, error) {
+func InitTestMiddlewareWithoutMetadata(t *testing.T, idpSsoUrl string, idpEntityId string,
+	idpCertifiatePath string, idpLogoutUrl string) (*samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
 
 	idpInformation := make(map[string]string)
 	idpInformation["idp_sso_url"] = idpSsoUrl
@@ -178,7 +176,7 @@ func InitMiddlewareWithoutMetadata(t *testing.T, idpSsoUrl string, idpEntityId s
 	idpInformation["idp_certificate_path"] = idpCertifiatePath
 	idpInformation["idp_logout_url"] = idpLogoutUrl
 
-	return InitMiddleware(t, idpInformation)
+	return InitTestMiddleware(t, idpInformation)
 }
 
 func GetAndDecryptAssertion(t *testing.T, samlResponseFile string, key *rsa.PrivateKey) (*crewjamsaml.Assertion, error) {

@@ -1,4 +1,4 @@
-package strategy
+package saml
 
 import (
 	"bytes"
@@ -35,10 +35,8 @@ import (
 	"github.com/ory/kratos/selfservice/flow/login"
 
 	"github.com/ory/kratos/selfservice/flow/registration"
-	samlflow "github.com/ory/kratos/selfservice/flow/saml"
 	"github.com/ory/kratos/selfservice/flow/settings"
 	"github.com/ory/kratos/selfservice/strategy"
-	samlstrategy "github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/kratos/session"
 	"github.com/ory/kratos/x"
 )
@@ -186,7 +184,7 @@ func (s *Strategy) validateFlow(ctx context.Context, r *http.Request, rid uuid.U
 
 	if ar, err := s.d.RegistrationFlowPersister().GetRegistrationFlow(ctx, rid); err == nil {
 		if ar.Type != flow.TypeBrowser {
-			return ar, samlstrategy.ErrAPIFlowNotSupported
+			return ar, ErrAPIFlowNotSupported
 		}
 
 		if err := ar.Valid(); err != nil {
@@ -197,7 +195,7 @@ func (s *Strategy) validateFlow(ctx context.Context, r *http.Request, rid uuid.U
 
 	if ar, err := s.d.LoginFlowPersister().GetLoginFlow(ctx, rid); err == nil {
 		if ar.Type != flow.TypeBrowser {
-			return ar, samlstrategy.ErrAPIFlowNotSupported
+			return ar, ErrAPIFlowNotSupported
 		}
 
 		if err := ar.Valid(); err != nil {
@@ -209,7 +207,7 @@ func (s *Strategy) validateFlow(ctx context.Context, r *http.Request, rid uuid.U
 	ar, err := s.d.SettingsFlowPersister().GetSettingsFlow(ctx, rid)
 	if err == nil {
 		if ar.Type != flow.TypeBrowser {
-			return ar, samlstrategy.ErrAPIFlowNotSupported
+			return ar, ErrAPIFlowNotSupported
 		}
 
 		sess, err := s.d.SessionManager().FetchFromRequest(ctx, r)
@@ -279,7 +277,7 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 		return
 	}
 
-	m, err := samlflow.GetMiddleware()
+	m, err := GetMiddleware()
 	if err != nil {
 		s.forwardError(w, r, err)
 	}
@@ -330,7 +328,7 @@ func (s *Strategy) forwardError(w http.ResponseWriter, r *http.Request, err erro
 }
 
 // Return the SAML Provider
-func (s *Strategy) Provider(ctx context.Context) (samlstrategy.Provider, error) {
+func (s *Strategy) Provider(ctx context.Context) (Provider, error) {
 	c, err := s.Config(ctx)
 	if err != nil {
 		return nil, err
@@ -345,8 +343,8 @@ func (s *Strategy) Provider(ctx context.Context) (samlstrategy.Provider, error) 
 }
 
 // Translate YAML Config file into a SAML Provider struct
-func (s *Strategy) Config(ctx context.Context) (*samlstrategy.ConfigurationCollection, error) {
-	var c samlstrategy.ConfigurationCollection
+func (s *Strategy) Config(ctx context.Context) (*ConfigurationCollection, error) {
+	var c ConfigurationCollection
 
 	conf := s.d.Config().SelfServiceStrategy(ctx, string(s.ID())).Config
 	if err := jsonx.

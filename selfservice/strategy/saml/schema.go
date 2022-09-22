@@ -1,4 +1,4 @@
-package strategy
+package saml
 
 import (
 	_ "embed"
