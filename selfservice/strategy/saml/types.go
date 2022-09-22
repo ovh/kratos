@@ -1,11 +1,10 @@
-package strategy
+package saml
 
 import (
 	"bytes"
 	"encoding/json"
 
 	"github.com/ory/kratos/identity"
-	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/container"
 	"github.com/ory/kratos/ui/node"
@@ -40,7 +39,7 @@ func NewCredentialsForSAML(subject string, provider string) (*identity.Credentia
 	}, nil
 }
 
-func AddProviders(c *container.Container, providers []saml.Configuration, message func(provider string) *text.Message) {
+func AddProviders(c *container.Container, providers []Configuration, message func(provider string) *text.Message) {
 	for _, p := range providers {
 		AddProvider(c, p.ID, message(
 			stringsx.Coalesce(p.Label, p.ID)))

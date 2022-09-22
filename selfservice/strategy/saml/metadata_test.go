@@ -8,11 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	samlhandler "github.com/ory/kratos/selfservice/flow/saml"
-	helpertest "github.com/ory/kratos/selfservice/flow/saml/helpertest"
-
-	samltesthelpers "github.com/ory/kratos/selfservice/flow/saml/helpertest"
-
+	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
@@ -71,12 +67,12 @@ func TestXmlMetadataExist(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	_, _, ts, err := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	_, _, ts, err := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 	assert.NilError(t, err)
-	res, _ := samltesthelpers.NewClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
 
 	assert.Check(t, is.Equal(http.StatusOK, res.StatusCode))
 	assert.Check(t, is.Equal("application/samlmetadata+xml",
@@ -88,11 +84,11 @@ func TestXmlMetadataValues(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	_, _, ts, err := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
-	res, _ := samltesthelpers.NewClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	_, _, ts, err := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
+	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
 	body, _ := io.ReadAll(res.Body)
 
 	assert.Check(t, is.Equal(http.StatusOK, res.StatusCode))

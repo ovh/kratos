@@ -1,4 +1,4 @@
-package strategy
+package saml
 
 import (
 	"bytes"
@@ -15,7 +15,6 @@ import (
 
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/selfservice/flow/registration"
-	samlsp "github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/kratos/text"
 
 	"github.com/tidwall/gjson"
@@ -32,7 +31,7 @@ func (s *Strategy) RegisterRegistrationRoutes(r *x.RouterPublic) {
 	s.setRoutes(r)
 }
 
-func (s *Strategy) GetRegistrationIdentity(r *http.Request, ctx context.Context, provider samlsp.Provider, claims *samlsp.Claims, logsEnabled bool) (*identity.Identity, error) {
+func (s *Strategy) GetRegistrationIdentity(r *http.Request, ctx context.Context, provider Provider, claims *Claims, logsEnabled bool) (*identity.Identity, error) {
 	// Fetch fetches the file contents from the mapper file.
 	jn, err := s.f.Fetch(provider.Config().Mapper)
 	if err != nil {
@@ -102,7 +101,7 @@ func (s *Strategy) GetRegistrationIdentity(r *http.Request, ctx context.Context,
 	return i, nil
 }
 
-func (s *Strategy) processRegistration(w http.ResponseWriter, r *http.Request, a *registration.Flow, provider samlsp.Provider, claims *samlsp.Claims) error {
+func (s *Strategy) processRegistration(w http.ResponseWriter, r *http.Request, a *registration.Flow, provider Provider, claims *Claims) error {
 
 	i, err := s.GetRegistrationIdentity(r, r.Context(), provider, claims, true)
 	if err != nil {

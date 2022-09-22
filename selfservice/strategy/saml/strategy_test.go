@@ -1,4 +1,4 @@
-package strategy_test
+package saml_test
 
 import (
 	"bytes"
@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"github.com/ory/kratos/identity"
-	samlhandler "github.com/ory/kratos/selfservice/flow/saml"
-	helpertest "github.com/ory/kratos/selfservice/flow/saml/helpertest"
-	samlstrategy "github.com/ory/kratos/selfservice/strategy/saml/strategy"
+	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/stretchr/testify/require"
 
 	"gotest.tools/assert"
@@ -23,12 +21,12 @@ func TestGetAndDecryptAssertion(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	middleware, _, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	middleware, _, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
-	assertion, err := helpertest.GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
+	assertion, err := GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
 
 	require.NoError(t, err)
 	assert.Check(t, assertion != nil)
@@ -39,12 +37,12 @@ func TestGetAttributesFromAssertion(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	middleware, strategy, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	middleware, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
-	assertion, _ := helpertest.GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
+	assertion, _ := GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
 
 	mapAttributes, err := strategy.GetAttributesFromAssertion(assertion)
 
@@ -69,10 +67,10 @@ func TestCreateAuthRequest(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	middleware, _, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	middleware, _, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
 	authReq, err := middleware.ServiceProvider.MakeAuthenticationRequest("https://samltest.id/idp/profile/SAML2/Redirect/SSO", "saml.HTTPPostBinding", "saml.HTTPPostBinding")
 	require.NoError(t, err)
@@ -93,10 +91,10 @@ func TestProvider(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	_, strategy, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
 	provider, err := strategy.Provider(context.Background())
 	require.NoError(t, err)
@@ -110,10 +108,10 @@ func TestConfig(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	_, strategy, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
 	config, err := strategy.Config(context.Background())
 	require.NoError(t, err)
@@ -128,10 +126,10 @@ func TestID(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	_, strategy, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
 	id := strategy.ID()
 	gotest.Check(t, id == "saml")
@@ -142,16 +140,16 @@ func TestCountActiveCredentials(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	_, strategy, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
 	mapCredentials := make(map[identity.CredentialsType]identity.Credentials)
 
 	var b bytes.Buffer
-	err := json.NewEncoder(&b).Encode(samlstrategy.CredentialsConfig{
-		Providers: []samlstrategy.ProviderCredentialsConfig{
+	err := json.NewEncoder(&b).Encode(saml.CredentialsConfig{
+		Providers: []saml.ProviderCredentialsConfig{
 			{
 				Subject:  "testUserID",
 				Provider: "saml",
@@ -175,13 +173,13 @@ func TestGetRegistrationIdentity(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	middleware, strategy, _, _ := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	middleware, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
 	provider, _ := strategy.Provider(context.Background())
-	assertion, _ := helpertest.GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
+	assertion, _ := GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
 	attributes, _ := strategy.GetAttributesFromAssertion(assertion)
 	claims, _ := provider.Claims(context.Background(), strategy.D().Config(), attributes)
 

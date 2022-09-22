@@ -4,10 +4,9 @@ import (
 	"io/ioutil"
 	"testing"
 
-	samlhandler "github.com/ory/kratos/selfservice/flow/saml"
+	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/stretchr/testify/require"
 
-	helpertest "github.com/ory/kratos/selfservice/flow/saml/helpertest"
 	"gotest.tools/assert"
 )
 
@@ -16,10 +15,10 @@ func TestInitMiddleWareWithMetadata(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	middleWare, _, _, err := helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	middleWare, _, _, err := InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
 	require.NoError(t, err)
 	assert.Check(t, middleWare != nil)
@@ -33,9 +32,9 @@ func TestInitMiddleWareWithoutMetadata(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	middleWare, _, _, err := helpertest.InitMiddlewareWithoutMetadata(t,
+	middleWare, _, _, err := InitTestMiddlewareWithoutMetadata(t,
 		"https://samltest.id/idp/profile/SAML2/Redirect/SSO",
 		"https://samltest.id/saml/idp",
 		"file://testdata/samlkratos.crt",
@@ -53,12 +52,12 @@ func TestGetMiddleware(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
-	helpertest.InitMiddlewareWithMetadata(t,
-		"file://testdata/idp_saml_metadata.xml")
+	InitTestMiddlewareWithMetadata(t,
+		"file://testdata/SP_IDPMetadata.xml")
 
-	middleWare, err := samlhandler.GetMiddleware()
+	middleWare, err := saml.GetMiddleware()
 
 	require.NoError(t, err)
 	assert.Check(t, middleWare != nil)
@@ -72,12 +71,12 @@ func TestMustParseCertificate(t *testing.T) {
 		t.Skip()
 	}
 
-	samlhandler.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists()
 
 	certificate, err := ioutil.ReadFile("testdata/samlkratos.crt")
 	require.NoError(t, err)
 
-	cert, err := samlhandler.MustParseCertificate(certificate)
+	cert, err := saml.MustParseCertificate(certificate)
 
 	require.NoError(t, err)
 	assert.Check(t, cert.Issuer.Country[0] == "AU")

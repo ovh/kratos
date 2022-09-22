@@ -24,8 +24,6 @@ import (
 
 	samlidp "github.com/crewjam/saml"
 
-	samlstrategy "github.com/ory/kratos/selfservice/strategy/saml"
-
 	"github.com/ory/kratos/session"
 	"github.com/ory/kratos/x"
 	"github.com/ory/x/decoderx"
@@ -144,7 +142,7 @@ func DestroyMiddlewareIfExists() {
 
 func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Config) error {
 	// Create a SAMLProvider object from the config file
-	var c samlstrategy.ConfigurationCollection
+	var c ConfigurationCollection
 	conf := config.SelfServiceStrategy(ctx, "saml").Config
 	if err := jsonx.
 		NewStrictDecoder(bytes.NewBuffer(conf)).
