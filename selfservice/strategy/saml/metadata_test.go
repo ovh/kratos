@@ -86,7 +86,7 @@ func TestXmlMetadataValues(t *testing.T) {
 
 	saml.DestroyMiddlewareIfExists()
 
-	_, _, ts, err := InitTestMiddlewareWithMetadata(t,
+	_, _, ts, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
 	body, _ := io.ReadAll(res.Body)

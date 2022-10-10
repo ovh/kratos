@@ -11,7 +11,6 @@ import (
 	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/stretchr/testify/require"
 
-	"gotest.tools/assert"
 	gotest "gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 )
@@ -29,7 +28,7 @@ func TestGetAndDecryptAssertion(t *testing.T) {
 	assertion, err := GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
 
 	require.NoError(t, err)
-	assert.Check(t, assertion != nil)
+	gotest.Check(t, assertion != nil)
 }
 
 func TestGetAttributesFromAssertion(t *testing.T) {
@@ -47,17 +46,17 @@ func TestGetAttributesFromAssertion(t *testing.T) {
 	mapAttributes, err := strategy.GetAttributesFromAssertion(assertion)
 
 	require.NoError(t, err)
-	assert.Check(t, mapAttributes["urn:oid:0.9.2342.19200300.100.1.1"][0] == "myself")
-	assert.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.1"][0] == "Member")
-	assert.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.1"][1] == "Staff")
-	assert.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.6"][0] == "myself@testshib.org")
-	assert.Check(t, mapAttributes["urn:oid:2.5.4.4"][0] == "And I")
-	assert.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.9"][0] == "Member@testshib.org")
-	assert.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.9"][1] == "Staff@testshib.org")
-	assert.Check(t, mapAttributes["urn:oid:2.5.4.42"][0] == "Me Myself")
-	assert.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.7"][0] == "urn:mace:dir:entitlement:common-lib-terms")
-	assert.Check(t, mapAttributes["urn:oid:2.5.4.3"][0] == "Me Myself And I")
-	assert.Check(t, mapAttributes["urn:oid:2.5.4.20"][0] == "555-5555")
+	gotest.Check(t, mapAttributes["urn:oid:0.9.2342.19200300.100.1.1"][0] == "myself")
+	gotest.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.1"][0] == "Member")
+	gotest.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.1"][1] == "Staff")
+	gotest.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.6"][0] == "myself@testshib.org")
+	gotest.Check(t, mapAttributes["urn:oid:2.5.4.4"][0] == "And I")
+	gotest.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.9"][0] == "Member@testshib.org")
+	gotest.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.9"][1] == "Staff@testshib.org")
+	gotest.Check(t, mapAttributes["urn:oid:2.5.4.42"][0] == "Me Myself")
+	gotest.Check(t, mapAttributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.7"][0] == "urn:mace:dir:entitlement:common-lib-terms")
+	gotest.Check(t, mapAttributes["urn:oid:2.5.4.3"][0] == "Me Myself And I")
+	gotest.Check(t, mapAttributes["urn:oid:2.5.4.20"][0] == "555-5555")
 
 	t.Log(mapAttributes)
 }
