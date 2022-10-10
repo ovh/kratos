@@ -13,6 +13,11 @@ import (
 // Handle SAML Assertion and process to either login or register
 func (s *Strategy) processLoginOrRegister(w http.ResponseWriter, r *http.Request, loginFlow *login.Flow, provider Provider, claims *Claims) (*flow.Flow, error) {
 
+	// If the user'ID is null, we have to handler error
+	if claims.Subject == "" {
+		return nil, s.handleError(w, r, loginFlow, provider.Config().ID, nil, errors.New("the user ID is empty: the problem probably comes from the mapping between the SAML attributes and the identity attributes"))
+	}
+
 	// This is a check to see if the user exists in the database
 	i, c, err := s.d.PrivilegedIdentityPool().FindByCredentialsIdentifier(r.Context(), identity.CredentialsTypeSAML, uid(provider.Config().ID, claims.Subject))
 
