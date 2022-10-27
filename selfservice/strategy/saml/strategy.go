@@ -50,6 +50,7 @@ const (
 
 var _ identity.ActiveCredentialsCounter = new(Strategy)
 
+// SAMLTODO dependencies
 type registrationStrategyDependencies interface {
 	x.LoggingProvider
 	x.WriterProvider
@@ -258,8 +259,8 @@ func (s *Strategy) validateCallback(w http.ResponseWriter, r *http.Request) (flo
 
 // Handle /selfservice/methods/saml/acs | Receive SAML response, parse the attributes and start auth flow
 func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-
 	pid := ps.ByName("provider")
+	// pid := "samlProvider"
 
 	if err := r.ParseForm(); err != nil {
 		s.d.SelfServiceErrorManager().Forward(r.Context(), w, r, s.handleError(w, r, nil, pid, nil, err))
@@ -297,7 +298,7 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 	}
 
 	// We get the provider information from the config file
-	provider, err := s.Provider(r.Context())
+	provider, err := s.Provider(r.Context(), pid)
 	if err != nil {
 		s.forwardError(w, r, err)
 		return
@@ -328,13 +329,13 @@ func (s *Strategy) forwardError(w http.ResponseWriter, r *http.Request, err erro
 }
 
 // Return the SAML Provider
-func (s *Strategy) Provider(ctx context.Context) (Provider, error) {
+func (s *Strategy) Provider(ctx context.Context, id string) (Provider, error) {
 	c, err := s.Config(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	provider, err := c.Provider(c.SAMLProviders[len(c.SAMLProviders)-1].ID, c.SAMLProviders[len(c.SAMLProviders)-1].Label)
+	provider, err := c.Provider(id, s.d)
 	if err != nil {
 		return nil, err
 	}

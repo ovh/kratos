@@ -369,6 +369,17 @@
             "Microsoft Active Directory"
           ]
         },
+        "provider": {
+          "title": "Provider",
+          "description": "Can only be generic currently.",
+          "type": "string",
+          "enum": [
+            "generic"
+          ],
+          "examples": [
+            "generic"
+          ]
+        },
         "public_cert_path": {
           "title": "Public Certificate Path",
           "description": "The Public Certificate for your SAML Messages",

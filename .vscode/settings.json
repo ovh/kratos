@@ -1,0 +1,6 @@
+// 20221021175229
+// https://raw.githubusercontent.com/sebferrer/kratos/saml-alpha-2/.vscode/settings.json
+
+{
+    "go.testTags": "sqlite"
+  }

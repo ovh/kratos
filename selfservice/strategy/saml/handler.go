@@ -83,12 +83,14 @@ func (h *Handler) RegisterPublicRoutes(router *x.RouterPublic) {
 func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	config := h.d.Config()
 	if samlMiddleware == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config); err != nil {
+		if err := h.instantiateMiddleware(r.Context(), *config); err == nil {
+			samlMiddleware.ServeMetadata(w, r)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 		}
 	}
 
-	samlMiddleware.ServeMetadata(w, r)
 }
 
 // swagger:route GET /self-service/methods/saml/auth v0alpha2 initializeSelfServiceSamlFlowForBrowsers
@@ -141,17 +143,14 @@ func DestroyMiddlewareIfExists() {
 }
 
 func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Config) error {
-	// Create a SAMLProvider object from the config file
-	var c ConfigurationCollection
-	conf := config.SelfServiceStrategy(ctx, "saml").Config
-	if err := jsonx.
-		NewStrictDecoder(bytes.NewBuffer(conf)).
-		Decode(&c); err != nil {
-		return errors.Wrapf(err, "Unable to decode config %v", string(conf))
+
+	provider, err := CreateSAMLProvider(config, ctx)
+	if err != nil {
+		return err
 	}
 
 	// Key pair to encrypt and sign SAML requests
-	keyPair, err := tls.LoadX509KeyPair(strings.Replace(c.SAMLProviders[len(c.SAMLProviders)-1].PublicCertPath, "file://", "", 1), strings.Replace(c.SAMLProviders[len(c.SAMLProviders)-1].PrivateKeyPath, "file://", "", 1))
+	keyPair, err := tls.LoadX509KeyPair(strings.Replace(provider.PublicCertPath, "file://", "", 1), strings.Replace(provider.PrivateKeyPath, "file://", "", 1))
 	if err != nil {
 		return err
 	}
@@ -163,10 +162,10 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	var idpMetadata *samlidp.EntityDescriptor
 
 	// We check if the metadata file is provided
-	if c.SAMLProviders[len(c.SAMLProviders)-1].IDPInformation["idp_metadata_url"] != "" {
+	if provider.IDPInformation["idp_metadata_url"] != "" {
 
-		metadataURL := c.SAMLProviders[len(c.SAMLProviders)-1].IDPInformation["idp_metadata_url"]
 		// The metadata file is provided
+		metadataURL := provider.IDPInformation["idp_metadata_url"]
 		if strings.HasPrefix(metadataURL, "file://") {
 			metadataURL = strings.Replace(metadataURL, "file://", "", 1)
 
@@ -196,25 +195,25 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 
 		// The metadata file is not provided
 		// So were are creating a minimalist IDP metadata based on what is provided by the user on the config file
-		entityIDURL, err := url.Parse(c.SAMLProviders[len(c.SAMLProviders)-1].IDPInformation["idp_entity_id"])
+		entityIDURL, err := url.Parse(provider.IDPInformation["idp_entity_id"])
 		if err != nil {
 			return err
 		}
 
 		// The IDP SSO URL
-		IDPSSOURL, err := url.Parse(c.SAMLProviders[len(c.SAMLProviders)-1].IDPInformation["idp_sso_url"])
+		IDPSSOURL, err := url.Parse(provider.IDPInformation["idp_sso_url"])
 		if err != nil {
 			return err
 		}
 
 		// The IDP Logout URL
-		IDPlogoutURL, err := url.Parse(c.SAMLProviders[len(c.SAMLProviders)-1].IDPInformation["idp_logout_url"])
+		IDPlogoutURL, err := url.Parse(provider.IDPInformation["idp_logout_url"])
 		if err != nil {
 			return err
 		}
 
 		// The certificate of the IDP
-		certificate, err := ioutil.ReadFile(strings.Replace(c.SAMLProviders[len(c.SAMLProviders)-1].IDPInformation["idp_certificate_path"], "file://", "", 1))
+		certificate, err := ioutil.ReadFile(strings.Replace(provider.IDPInformation["idp_certificate_path"], "file://", "", 1))
 		if err != nil {
 			return err
 		}
@@ -331,4 +330,49 @@ func MustParseCertificate(pemStr []byte) (*x509.Certificate, error) {
 		return nil, err
 	}
 	return cert, nil
+}
+
+func CreateSAMLProvider(config config.Config, ctx context.Context) (*Configuration, error) {
+	// Create a SAMLProvider object from the config file
+	var c ConfigurationCollection
+	conf := config.SelfServiceStrategy(ctx, "saml").Config
+	if err := jsonx.
+		NewStrictDecoder(bytes.NewBuffer(conf)).
+		Decode(&c); err != nil {
+		return nil, errors.Wrapf(err, "Unable to decode config %v", string(conf))
+	}
+
+	if len(c.SAMLProviders) == 0 { // /!\ Corriger apres modif du provider
+		return nil, errors.Errorf("Please indicate a SAML Identity Provider in your configuration file")
+	}
+
+	if c.SAMLProviders[len(c.SAMLProviders)-1].ID == "" {
+		return nil, errors.Errorf("Provider must have an ID")
+	}
+
+	if c.SAMLProviders[len(c.SAMLProviders)-1].Label == "" {
+		return nil, errors.Errorf("Provider must have a label")
+	}
+
+	if c.SAMLProviders[len(c.SAMLProviders)-1].PrivateKeyPath == "" {
+		return nil, errors.Errorf("Provider must have a private key")
+	}
+
+	if c.SAMLProviders[len(c.SAMLProviders)-1].PublicCertPath == "" {
+		return nil, errors.Errorf("Provider must have a public certificate")
+	}
+
+	if c.SAMLProviders[len(c.SAMLProviders)-1].AttributesMap == nil || len(c.SAMLProviders[len(c.SAMLProviders)-1].AttributesMap) == 0 {
+		return nil, errors.Errorf("Provider must have an attributes map")
+	}
+
+	if c.SAMLProviders[len(c.SAMLProviders)-1].AttributesMap["id"] == "" {
+		return nil, errors.Errorf("ThYou must have an ID field in your attribute_map")
+	}
+
+	if c.SAMLProviders[len(c.SAMLProviders)-1].Mapper == "" {
+		return nil, errors.Errorf("Provider must have a mapper url")
+	}
+
+	return &c.SAMLProviders[len(c.SAMLProviders)-1], nil
 }

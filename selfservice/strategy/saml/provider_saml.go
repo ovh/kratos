@@ -12,20 +12,18 @@ import (
 )
 
 type ProviderSAML struct {
-	id     string
-	label  string
+	// p      *gosaml.Provider  // SAMLTODO
 	config *Configuration
+	reg    registrationStrategyDependencies
 }
 
 func NewProviderSAML(
-	id string,
-	label string,
 	config *Configuration,
+	reg registrationStrategyDependencies,
 ) *ProviderSAML {
 	return &ProviderSAML{
-		id:     id,
-		label:  label,
 		config: config,
+		reg:    reg,
 	}
 }
 

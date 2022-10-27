@@ -1,8 +1,17 @@
 package saml
 
+import (
+	"github.com/ory/herodot"
+	"github.com/pkg/errors"
+)
+
 type Configuration struct {
 	// ID is the provider's ID
 	ID string `json:"id"`
+
+	// Provider is either "generic" for a generic OAuth 2.0 / OpenID Connect Provider or one of:
+	// - generic
+	Provider string `json:"provider"`
 
 	// Label represents an optional label which can be used in the UI generation.
 	Label string `json:"label"`
@@ -28,6 +37,26 @@ type ConfigurationCollection struct {
 	SAMLProviders []Configuration `json:"providers"`
 }
 
-func (c ConfigurationCollection) Provider(id string, label string) (Provider, error) {
-	return NewProviderSAML(id, label, &c.SAMLProviders[len(c.SAMLProviders)-1]), nil
+func (c ConfigurationCollection) Provider(id string, reg registrationStrategyDependencies) (Provider, error) {
+	for k := range c.SAMLProviders { // SAMLTODOprovider
+		p := c.SAMLProviders[k]
+		if p.ID == id {
+			var providerNames []string
+			var addProviderName = func(pn string) string {
+				providerNames = append(providerNames, pn)
+				return pn
+			}
+
+			// !!! WARNING !!!
+			//
+			// If you add a provider here, please also add a test to
+			// provider_private_net_test.go
+			switch p.Provider {
+			case addProviderName("generic"):
+				return NewProviderSAML(&p, reg), nil // SAMLTODO generic
+			}
+			return nil, errors.Errorf("provider type %s is not supported, supported are: %v", p.Provider, providerNames)
+		}
+	}
+	return nil, errors.WithStack(herodot.ErrNotFound.WithReasonf(`SAML Provider "%s" is unknown or has not been configured`, id))
 }

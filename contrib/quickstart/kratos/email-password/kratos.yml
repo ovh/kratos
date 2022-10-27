@@ -67,8 +67,9 @@ selfservice:
       enabled: true
       config:
         providers:
-          - id: samlProviderID
+          - id: samlProvider
             label: SAML SSO
+            provider: generic
             public_cert_path: file://contrib/quickstart/kratos/email-password/samlkratos.cert
             private_key_path: file://contrib/quickstart/kratos/email-password/samlkratos.key
             mapper_url: file://contrib/quickstart/kratos/email-password/saml-oidc.jsonnet
