@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -99,10 +98,6 @@ func (s *Strategy) D() registrationStrategyDependencies {
 
 func (s *Strategy) NodeGroup() node.UiNodeGroup {
 	return node.SAMLGroup
-}
-
-func uid(provider, subject string) string {
-	return fmt.Sprintf("%s:%s", provider, subject)
 }
 
 func isForced(req interface{}) bool {
@@ -260,7 +255,7 @@ func (s *Strategy) validateCallback(w http.ResponseWriter, r *http.Request) (flo
 // Handle /selfservice/methods/saml/acs | Receive SAML response, parse the attributes and start auth flow
 func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	pid := ps.ByName("provider")
-	// pid := "samlProvider"
+	//pid := "samlProvider"
 
 	if err := r.ParseForm(); err != nil {
 		s.d.SelfServiceErrorManager().Forward(r.Context(), w, r, s.handleError(w, r, nil, pid, nil, err))
@@ -411,7 +406,7 @@ func (s *Strategy) handleError(w http.ResponseWriter, r *http.Request, f flow.Fl
 func (s *Strategy) CountActiveCredentials(cc map[identity.CredentialsType]identity.Credentials) (count int, err error) {
 	for _, c := range cc {
 		if c.Type == s.ID() && gjson.ValidBytes(c.Config) {
-			var conf CredentialsConfig
+			var conf identity.CredentialsSAML
 			if err = json.Unmarshal(c.Config, &conf); err != nil {
 				return 0, errors.WithStack(err)
 			}
@@ -436,7 +431,7 @@ func (s *Strategy) CountActiveFirstFactorCredentials(cc map[identity.Credentials
 	for _, c := range cc {
 		if c.Type == s.ID() && gjson.ValidBytes(c.Config) {
 			// TODO MANAGE THIS
-			var conf identity.CredentialsOIDC
+			var conf identity.CredentialsSAML
 			if err = json.Unmarshal(c.Config, &conf); err != nil {
 				return 0, errors.WithStack(err)
 			}

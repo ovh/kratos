@@ -147,8 +147,8 @@ func TestCountActiveCredentials(t *testing.T) {
 	mapCredentials := make(map[identity.CredentialsType]identity.Credentials)
 
 	var b bytes.Buffer
-	err := json.NewEncoder(&b).Encode(saml.CredentialsConfig{
-		Providers: []saml.ProviderCredentialsConfig{
+	err := json.NewEncoder(&b).Encode(identity.CredentialsSAML{
+		Providers: []identity.CredentialsSAMLProvider{
 			{
 				Subject:  "testUserID",
 				Provider: "saml",

@@ -19,7 +19,7 @@ func (s *Strategy) processLoginOrRegister(w http.ResponseWriter, r *http.Request
 	}
 
 	// This is a check to see if the user exists in the database
-	i, c, err := s.d.PrivilegedIdentityPool().FindByCredentialsIdentifier(r.Context(), identity.CredentialsTypeSAML, uid(provider.Config().ID, claims.Subject))
+	i, c, err := s.d.PrivilegedIdentityPool().FindByCredentialsIdentifier(r.Context(), identity.CredentialsTypeSAML, identity.SAMLUniqueID(provider.Config().ID, claims.Subject))
 
 	if err != nil {
 		// ErrNoRows is returned when a SQL SELECT statement returns no rows.

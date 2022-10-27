@@ -90,7 +90,7 @@ func (s *Strategy) GetRegistrationIdentity(r *http.Request, ctx context.Context,
 	}
 
 	// Create new uniq credentials identifier for user is database
-	creds, err := NewCredentialsForSAML(claims.Subject, provider.Config().ID)
+	creds, err := identity.NewCredentialsSAML(claims.Subject, provider.Config().ID)
 	if err != nil {
 		return i, err
 	}

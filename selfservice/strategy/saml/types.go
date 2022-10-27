@@ -1,42 +1,14 @@
 package saml
 
 import (
-	"bytes"
-	"encoding/json"
-
-	"github.com/ory/kratos/identity"
 	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/container"
 	"github.com/ory/kratos/ui/node"
-	"github.com/ory/kratos/x"
 	"github.com/ory/x/stringsx"
-
-	"github.com/pkg/errors"
 )
 
-type CredentialsConfig struct {
-	Providers []ProviderCredentialsConfig `json:"providers"`
-}
-
-// Create an uniq identifier for user in database. Its look like "id + the id of the saml provider"
-func NewCredentialsForSAML(subject string, provider string) (*identity.Credentials, error) {
-	var b bytes.Buffer
-	if err := json.NewEncoder(&b).Encode(CredentialsConfig{
-		Providers: []ProviderCredentialsConfig{
-			{
-				Subject:  subject,
-				Provider: provider,
-			}},
-	}); err != nil {
-		return nil, errors.WithStack(x.PseudoPanic.
-			WithDebugf("Unable to encode password options to JSON: %s", err))
-	}
-
-	return &identity.Credentials{
-		Type:        identity.CredentialsTypeSAML,
-		Identifiers: []string{uid(provider, subject)},
-		Config:      b.Bytes(),
-	}, nil
+type FlowMethod struct {
+	*container.Container
 }
 
 func AddProviders(c *container.Container, providers []Configuration, message func(provider string) *text.Message) {
@@ -52,11 +24,6 @@ func AddProvider(c *container.Container, providerID string, message *text.Messag
 	)
 }
 
-type ProviderCredentialsConfig struct {
-	Subject  string `json:"subject"`
-	Provider string `json:"samlProvider"`
-}
-
-type FlowMethod struct {
-	*container.Container
+func NewFlowMethod(f *container.Container) *FlowMethod {
+	return &FlowMethod{Container: f}
 }
