@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"encoding/xml"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -77,19 +78,23 @@ func (h *Handler) RegisterPublicRoutes(router *x.RouterPublic) {
 
 	router.GET(RouteSamlMetadata, h.serveMetadata)
 	router.GET(RouteSamlLoginInit, h.loginWithIdp)
+
 }
 
 // Handle /selfservice/methods/saml/metadata
 func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	config := h.d.Config()
 	if samlMiddleware == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config); err == nil {
-			samlMiddleware.ServeMetadata(w, r)
-		} else {
+		if err := h.instantiateMiddleware(r.Context(), *config); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+			return
 		}
 	}
+
+	buf, _ := xml.MarshalIndent(samlMiddleware.ServiceProvider.Metadata(), "", "  ")
+	w.Header().Set("Content-Type", "text/xml")
+	w.Write(buf)
 
 }
 
@@ -276,7 +281,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 
 	// Sometimes there is an issue with double slash into the url so we prevent it
 	// Crewjam library use default route for ACS and metadat but we want to overwrite them
-	RouteSamlAcsWithSlash := RouteSamlAcs
+	RouteSamlAcsWithSlash := RouteSamlAcs + "/" + provider.ID
 	if publicUrlString[len(publicUrlString)-1] != '/' {
 
 		u, err := url.Parse(publicUrlString + RouteSamlAcsWithSlash)
