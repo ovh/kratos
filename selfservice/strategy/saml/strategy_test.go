@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"testing"
 
 	"github.com/ory/kratos/identity"
+	"github.com/ory/kratos/internal"
 	"github.com/ory/kratos/selfservice/strategy/saml"
+	"github.com/ory/x/sqlxx"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	gotest "gotest.tools/assert"
@@ -185,4 +189,100 @@ func TestGetRegistrationIdentity(t *testing.T) {
 	i, err := strategy.GetRegistrationIdentity(nil, context.Background(), provider, claims, false)
 	require.NoError(t, err)
 	gotest.Check(t, i != nil)
+}
+
+func TestCountActiveFirstFactorCredentials(t *testing.T) {
+	_, reg := internal.NewFastRegistryWithMocks(t)
+	strategy := saml.NewStrategy(reg)
+
+	toJson := func(c identity.CredentialsSAML) []byte {
+		out, err := json.Marshal(&c)
+		require.NoError(t, err)
+		return out
+	}
+
+	for k, tc := range []struct {
+		in       identity.CredentialsCollection
+		expected int
+	}{
+		{
+			in: identity.CredentialsCollection{{
+				Type:   strategy.ID(),
+				Config: sqlxx.JSONRawMessage{},
+			}},
+		},
+		{
+			in: identity.CredentialsCollection{{
+				Type: strategy.ID(),
+				Config: toJson(identity.CredentialsSAML{Providers: []identity.CredentialsSAMLProvider{
+					{Subject: "foo", Provider: "bar"},
+				}}),
+			}},
+		},
+		{
+			in: identity.CredentialsCollection{{
+				Type:        strategy.ID(),
+				Identifiers: []string{""},
+				Config: toJson(identity.CredentialsSAML{Providers: []identity.CredentialsSAMLProvider{
+					{Subject: "foo", Provider: "bar"},
+				}}),
+			}},
+		},
+		{
+			in: identity.CredentialsCollection{{
+				Type:        strategy.ID(),
+				Identifiers: []string{"bar:"},
+				Config: toJson(identity.CredentialsSAML{Providers: []identity.CredentialsSAMLProvider{
+					{Subject: "foo", Provider: "bar"},
+				}}),
+			}},
+		},
+		{
+			in: identity.CredentialsCollection{{
+				Type:        strategy.ID(),
+				Identifiers: []string{":foo"},
+				Config: toJson(identity.CredentialsSAML{Providers: []identity.CredentialsSAMLProvider{
+					{Subject: "foo", Provider: "bar"},
+				}}),
+			}},
+		},
+		{
+			in: identity.CredentialsCollection{{
+				Type:        strategy.ID(),
+				Identifiers: []string{"not-bar:foo"},
+				Config: toJson(identity.CredentialsSAML{Providers: []identity.CredentialsSAMLProvider{
+					{Subject: "foo", Provider: "bar"},
+				}}),
+			}},
+		},
+		{
+			in: identity.CredentialsCollection{{
+				Type:        strategy.ID(),
+				Identifiers: []string{"bar:not-foo"},
+				Config: toJson(identity.CredentialsSAML{Providers: []identity.CredentialsSAMLProvider{
+					{Subject: "foo", Provider: "bar"},
+				}}),
+			}},
+		},
+		{
+			in: identity.CredentialsCollection{{
+				Type:        strategy.ID(),
+				Identifiers: []string{"bar:foo"},
+				Config: toJson(identity.CredentialsSAML{Providers: []identity.CredentialsSAMLProvider{
+					{Subject: "foo", Provider: "bar"},
+				}}),
+			}},
+			expected: 1,
+		},
+	} {
+		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
+			in := make(map[identity.CredentialsType]identity.Credentials)
+			for _, v := range tc.in {
+				in[v.Type] = v
+			}
+			actual, err := strategy.CountActiveFirstFactorCredentials(in)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
 }
