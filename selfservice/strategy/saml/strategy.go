@@ -264,8 +264,6 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 	if err != nil {
 		if req != nil {
 			s.forwardError(w, r, s.handleError(w, r, req, pid, nil, err))
-			// TODO add flow param to s.handleError
-			// s.forwardError(w, r, req, s.handleError(w, r, req, pid, nil, err))
 		} else {
 			s.d.SelfServiceErrorManager().Forward(r.Context(), w, r, s.handleError(w, r, nil, pid, nil, err))
 		}

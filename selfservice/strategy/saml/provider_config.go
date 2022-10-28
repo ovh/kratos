@@ -37,7 +37,7 @@ type ConfigurationCollection struct {
 }
 
 func (c ConfigurationCollection) Provider(id string, reg registrationStrategyDependencies) (Provider, error) {
-	for k := range c.SAMLProviders { // SAMLTODOprovider
+	for k := range c.SAMLProviders {
 		p := c.SAMLProviders[k]
 		if p.ID == id {
 			var providerNames []string
@@ -46,13 +46,9 @@ func (c ConfigurationCollection) Provider(id string, reg registrationStrategyDep
 				return pn
 			}
 
-			// !!! WARNING !!!
-			//
-			// If you add a provider here, please also add a test to
-			// provider_private_net_test.go
 			switch p.Provider {
 			case addProviderName("generic"):
-				return NewProviderSAML(&p, reg), nil // SAMLTODO generic
+				return NewProviderSAML(&p, reg), nil
 			}
 			return nil, errors.Errorf("provider type %s is not supported, supported are: %v", p.Provider, providerNames)
 		}

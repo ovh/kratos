@@ -12,7 +12,6 @@ import (
 )
 
 type ProviderSAML struct {
-	// p      *gosaml.Provider  // SAMLTODO
 	config *Configuration
 	reg    registrationStrategyDependencies
 }

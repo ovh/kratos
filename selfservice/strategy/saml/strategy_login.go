@@ -60,8 +60,8 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login
 		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The password credentials could not be decoded properly").WithDebug(err.Error())))
 	}
 
-	sess := session.NewInactiveSession()                                  //creation of an inactive session
-	sess.CompletedLoginFor(s.ID(), identity.AuthenticatorAssuranceLevel1) //Add saml to the Authentication Method References
+	sess := session.NewInactiveSession()                                  // Creation of an inactive session
+	sess.CompletedLoginFor(s.ID(), identity.AuthenticatorAssuranceLevel1) // Add saml to the Authentication Method References
 
 	if err := s.d.LoginHookExecutor().PostLoginHook(w, r, node.SAMLGroup, a, i, sess); err != nil {
 		return nil, s.handleError(w, r, a, provider.Config().ID, nil, err)
@@ -80,7 +80,7 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 		return nil, s.handleError(w, r, f, "", nil, errors.WithStack(herodot.ErrBadRequest.WithDebug(err.Error()).WithReasonf("Unable to parse HTTP form request: %s", err.Error())))
 	}
 
-	var pid = p.Provider // this can come from both url query and post body
+	var pid = p.Provider // This can come from both url query and post body
 	if pid == "" {
 		return nil, errors.WithStack(flow.ErrStrategyNotResponsible)
 	}
