@@ -36,23 +36,6 @@ import (
 var TimeNow = func() time.Time { return time.Now().UTC() }
 var RandReader = rand.Reader
 
-func NewTestSAMLProvider(
-	t *testing.T,
-	kratos *httptest.Server,
-	id, label string,
-) saml.Configuration {
-
-	return saml.Configuration{
-		ID:             id,
-		Label:          label,
-		PublicCertPath: "secret",
-		PrivateKeyPath: "/",
-		Mapper:         "file://./testdata/saml.jsonnet",
-		//IDPMetadataURL: "",
-		//IDPSSOURL:      "",
-	}
-}
-
 func ViperSetProviderConfig(t *testing.T, conf *config.Config, SAMLProvider ...saml.Configuration) {
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &saml.ConfigurationCollection{SAMLProviders: SAMLProvider})
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".enabled", true)
@@ -114,7 +97,6 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 
 	strategy := saml.NewStrategy(reg)
-	errTS := testhelpers.NewErrorTestServer(t, reg)
 	routerP := x.NewRouterPublic()
 	routerA := x.NewRouterAdmin()
 	ts, _ := testhelpers.NewKratosServerWithRouters(t, reg, routerP, routerA)
@@ -129,10 +111,10 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	ViperSetProviderConfig(
 		t,
 		conf,
-		NewTestSAMLProvider(t, ts, "samlProviderTestID", "samlProviderTestLabel"),
 		saml.Configuration{
 			ID:             "samlProviderTestID",
 			Label:          "samlProviderTestLabel",
+			Provider:       "generic",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
 			Mapper:         "file://testdata/saml.jsonnet",
@@ -147,7 +129,6 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 		identity.CredentialsTypeSAML.String()), []config.SelfServiceHook{{Name: "session"}})
 
 	t.Logf("Kratos Public URL: %s", ts.URL)
-	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	// Instantiates the MiddleWare
 	_, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")

@@ -115,7 +115,7 @@ func TestConfig(t *testing.T) {
 	config, err := strategy.Config(context.Background())
 	require.NoError(t, err)
 	gotest.Check(t, config != nil)
-	gotest.Check(t, len(config.SAMLProviders) == 2)
+	gotest.Check(t, len(config.SAMLProviders) == 1)
 	gotest.Check(t, config.SAMLProviders[0].ID == "samlProviderTestID")
 	gotest.Check(t, config.SAMLProviders[0].Label == "samlProviderTestLabel")
 }

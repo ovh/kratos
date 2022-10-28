@@ -95,9 +95,8 @@ func TestInitSAMLWithoutPoviderID(t *testing.T) {
 	ViperSetProviderConfig(
 		t,
 		conf,
-		NewTestSAMLProvider(t, ts, "", "samlProviderTestLabel"),
 		saml.Configuration{
-			ID:             "samlProviderTestID",
+			ID:             "",
 			Label:          "samlProviderTestLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
@@ -117,7 +116,7 @@ func TestInitSAMLWithoutPoviderID(t *testing.T) {
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
 	body, _ := ioutil.ReadAll(resp.Body)
-	assert.Contains(t, string(body), "You must have an ID field in your attribute_map")
+	assert.Contains(t, string(body), "Provider must have an ID")
 }
 
 func TestAttributesMapWithoutID(t *testing.T) {
@@ -145,7 +144,6 @@ func TestAttributesMapWithoutID(t *testing.T) {
 	ViperSetProviderConfig(
 		t,
 		conf,
-		NewTestSAMLProvider(t, ts, "samlProviderTestID", "samlProviderTestLabel"),
 		saml.Configuration{
 			ID:             "samlProviderTestID",
 			Label:          "samlProviderTestLabel",

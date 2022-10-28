@@ -2,6 +2,7 @@ package saml_test
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -69,14 +70,14 @@ func TestXmlMetadataExist(t *testing.T) {
 
 	saml.DestroyMiddlewareIfExists()
 
-	_, _, ts, err := InitTestMiddlewareWithMetadata(t,
-		"file://testdata/SP_IDPMetadata.xml")
+	_, _, ts, err := InitTestMiddlewareWithMetadata(t, "file://testdata/SP_IDPMetadata.xml")
 	assert.NilError(t, err)
-	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
-
+	res, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	assert.NilError(t, err)
+	body, _ := ioutil.ReadAll(res.Body)
+	fmt.Println(body)
 	assert.Check(t, is.Equal(http.StatusOK, res.StatusCode))
-	assert.Check(t, is.Equal("application/samlmetadata+xml",
-		res.Header.Get("Content-type")))
+	assert.Check(t, is.Equal("text/xml", res.Header.Get("Content-Type")))
 }
 
 func TestXmlMetadataValues(t *testing.T) {
@@ -86,14 +87,13 @@ func TestXmlMetadataValues(t *testing.T) {
 
 	saml.DestroyMiddlewareIfExists()
 
-	_, _, ts, _ := InitTestMiddlewareWithMetadata(t,
-		"file://testdata/SP_IDPMetadata.xml")
+	_, _, ts, _ := InitTestMiddlewareWithMetadata(t, "file://testdata/SP_IDPMetadata.xml")
 	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
 	body, _ := io.ReadAll(res.Body)
 
 	assert.Check(t, is.Equal(http.StatusOK, res.StatusCode))
-	assert.Check(t, is.Equal("application/samlmetadata+xml",
-		res.Header.Get("Content-type")))
+	assert.Check(t, is.Equal("text/xml",
+		res.Header.Get("Content-Type")))
 
 	expectedMetadata, err := ioutil.ReadFile("./testdata/expected_metadata.xml")
 	assert.NilError(t, err)
