@@ -43,7 +43,7 @@ import (
 const (
 	RouteBase = "/self-service/methods/saml"
 
-	RouteAcs  = RouteBase + "/acs"
+	RouteAcs  = RouteBase + "/acs/:provider"
 	RouteAuth = RouteBase + "/auth"
 )
 
@@ -255,7 +255,6 @@ func (s *Strategy) validateCallback(w http.ResponseWriter, r *http.Request) (flo
 // Handle /selfservice/methods/saml/acs | Receive SAML response, parse the attributes and start auth flow
 func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	pid := ps.ByName("provider")
-	//pid := "samlProvider"
 
 	if err := r.ParseForm(); err != nil {
 		s.d.SelfServiceErrorManager().Forward(r.Context(), w, r, s.handleError(w, r, nil, pid, nil, err))
@@ -323,7 +322,7 @@ func (s *Strategy) forwardError(w http.ResponseWriter, r *http.Request, err erro
 	s.d.LoginFlowErrorHandler().WriteFlowError(w, r, nil, s.NodeGroup(), err)
 }
 
-// Return the SAML Provider
+// Return the SAML Provider with the specific ID
 func (s *Strategy) Provider(ctx context.Context, id string) (Provider, error) {
 	c, err := s.Config(ctx)
 	if err != nil {

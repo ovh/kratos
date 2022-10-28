@@ -9,8 +9,7 @@ type Configuration struct {
 	// ID is the provider's ID
 	ID string `json:"id"`
 
-	// Provider is either "generic" for a generic OAuth 2.0 / OpenID Connect Provider or one of:
-	// - generic
+	// Provider is "generic" for SAML provider
 	Provider string `json:"provider"`
 
 	// Label represents an optional label which can be used in the UI generation.
