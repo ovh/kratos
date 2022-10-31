@@ -43,8 +43,9 @@ import (
 const (
 	RouteBase = "/self-service/methods/saml"
 
-	RouteAcs  = RouteBase + "/acs/:provider"
-	RouteAuth = RouteBase + "/auth"
+	RouteAcs      = RouteBase + "/acs/:provider"
+	RouteAuth     = RouteBase + "/auth"
+	RouteMetadata = RouteBase + "/metadata"
 )
 
 var _ identity.ActiveCredentialsCounter = new(Strategy)
@@ -223,9 +224,7 @@ func (s *Strategy) validateFlow(ctx context.Context, r *http.Request, rid uuid.U
 func (s *Strategy) alreadyAuthenticated(w http.ResponseWriter, r *http.Request, req interface{}) bool {
 	// we assume an error means the user has no session
 	if _, err := s.d.SessionManager().FetchFromRequest(r.Context(), r); err == nil {
-		if _, ok := req.(*settings.Flow); ok {
-			// ignore this if it's a settings flow
-		} else if !isForced(req) {
+		if !isForced(req) {
 			http.Redirect(w, r, s.d.Config().SelfServiceBrowserDefaultReturnTo(r.Context()).String(), http.StatusSeeOther)
 			return true
 		}

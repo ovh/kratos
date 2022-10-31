@@ -31,12 +31,6 @@ import (
 	"github.com/ory/x/jsonx"
 )
 
-const (
-	RouteSamlMetadata  = "/self-service/methods/saml/metadata"
-	RouteSamlLoginInit = "/self-service/methods/saml/auth" // Redirect to the IDP
-	RouteSamlAcs       = "/self-service/methods/saml/acs"
-)
-
 var ErrNoSession = errors.New("saml: session not present")
 var samlMiddleware *samlsp.Middleware
 
@@ -73,11 +67,11 @@ func NewHandler(d handlerDependencies) *Handler {
 
 func (h *Handler) RegisterPublicRoutes(router *x.RouterPublic) {
 
-	h.d.CSRFHandler().IgnorePath(RouteSamlLoginInit)
-	h.d.CSRFHandler().IgnorePath(RouteSamlAcs)
+	h.d.CSRFHandler().IgnorePath(RouteAuth)
+	h.d.CSRFHandler().IgnoreGlob(RouteBase + "/acs/*")
 
-	router.GET(RouteSamlMetadata, h.serveMetadata)
-	router.GET(RouteSamlLoginInit, h.loginWithIdp)
+	router.GET(RouteMetadata, h.serveMetadata)
+	router.GET(RouteAuth, h.loginWithIdp)
 
 }
 
@@ -86,8 +80,8 @@ func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httpr
 	config := h.d.Config()
 	if samlMiddleware == nil {
 		if err := h.instantiateMiddleware(r.Context(), *config); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -112,14 +106,14 @@ func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httpr
 //	  500: jsonError
 func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Middleware is a singleton so we have to verify that it exists
+	config := h.d.Config()
 	if samlMiddleware == nil {
-		config := h.d.Config()
 		if err := h.instantiateMiddleware(r.Context(), *config); err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
-
-	conf := h.d.Config()
 
 	// We have to get the SessionID from the cookie to inject it into the context to ensure continuity
 	cookie, err := r.Cookie(continuity.CookieName)
@@ -137,7 +131,7 @@ func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httpro
 		samlMiddleware.HandleStartAuthFlow(w, r)
 	} else {
 		// A session already exist, we redirect to the main page
-		http.Redirect(w, r, conf.SelfServiceBrowserDefaultReturnTo(r.Context()).Path, http.StatusTemporaryRedirect)
+		http.Redirect(w, r, config.SelfServiceBrowserDefaultReturnTo(r.Context()).Path, http.StatusTemporaryRedirect)
 	}
 }
 
@@ -281,7 +275,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 
 	// Sometimes there is an issue with double slash into the url so we prevent it
 	// Crewjam library use default route for ACS and metadat but we want to overwrite them
-	RouteSamlAcsWithSlash := RouteSamlAcs + "/" + provider.ID
+	RouteSamlAcsWithSlash := strings.Replace(RouteAcs, ":provider", provider.ID, 1)
 	if publicUrlString[len(publicUrlString)-1] != '/' {
 
 		u, err := url.Parse(publicUrlString + RouteSamlAcsWithSlash)
@@ -301,7 +295,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	}
 
 	// Crewjam library use default route for ACS and metadata but we want to overwrite them
-	metadata, err := url.Parse(publicUrlString + RouteSamlMetadata)
+	metadata, err := url.Parse(publicUrlString + RouteMetadata)
 	if err != nil {
 		return err
 	}
