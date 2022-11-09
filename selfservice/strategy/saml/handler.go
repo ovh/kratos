@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -141,6 +142,7 @@ func DestroyMiddlewareIfExists() {
 	}
 }
 
+// Instantiate the middleware SAML from the information in the configuration file
 func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Config) error {
 
 	provider, err := CreateSAMLProvider(config, ctx)
@@ -167,7 +169,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 		metadataURL := provider.IDPInformation["idp_metadata_url"]
 		if strings.HasPrefix(metadataURL, "file://") {
 			metadataURL = strings.Replace(metadataURL, "file://", "", 1)
-
+			metadataURL = filepath.Clean(metadataURL)
 			metadataPlainText, err := ioutil.ReadFile(metadataURL)
 			if err != nil {
 				return err
@@ -312,9 +314,10 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	return nil
 }
 
+// Return the singleton MiddleWare
 func GetMiddleware() (*samlsp.Middleware, error) {
 	if samlMiddleware == nil {
-		return nil, errors.Errorf("The MiddleWare for SAML is null (Probably due to a backward step)")
+		return nil, errors.Errorf("An error occurred while retrieving the middeware, it is null")
 	}
 	return samlMiddleware, nil
 }
@@ -331,8 +334,8 @@ func MustParseCertificate(pemStr []byte) (*x509.Certificate, error) {
 	return cert, nil
 }
 
+// Create a SAMLProvider object from the config file
 func CreateSAMLProvider(config config.Config, ctx context.Context) (*Configuration, error) {
-	// Create a SAMLProvider object from the config file
 	var c ConfigurationCollection
 	conf := config.SelfServiceStrategy(ctx, "saml").Config
 	if err := jsonx.
@@ -341,37 +344,51 @@ func CreateSAMLProvider(config config.Config, ctx context.Context) (*Configurati
 		return nil, errors.Wrapf(err, "Unable to decode config %v", string(conf))
 	}
 
-	if len(c.SAMLProviders) == 0 { // /!\ Corriger apres modif du provider
+	if len(c.SAMLProviders) != 1 {
 		return nil, errors.Errorf("Please indicate a SAML Identity Provider in your configuration file")
 	}
 
-	if c.SAMLProviders[len(c.SAMLProviders)-1].ID == "" {
+	if c.SAMLProviders[0].IDPInformation == nil {
+		return nil, errors.Errorf("Please include your Identity Provider information in the configuration file.")
+	}
+
+	_, sso_exists := c.SAMLProviders[0].IDPInformation["idp_sso_url"]
+	_, entity_id_exists := c.SAMLProviders[0].IDPInformation["idp_entity_id"]
+	_, certificate_exists := c.SAMLProviders[0].IDPInformation["idp_certificate_path"]
+	_, logout_url_exists := c.SAMLProviders[0].IDPInformation["idp_logout_url"]
+	_, metadata_exists := c.SAMLProviders[0].IDPInformation["idp_metadata_url"]
+
+	if (!metadata_exists && (!sso_exists || !entity_id_exists || !certificate_exists || !logout_url_exists)) || len(c.SAMLProviders[0].IDPInformation) > 4 {
+		return nil, errors.Errorf("Please check your IDP information in the configuration file")
+	}
+
+	if c.SAMLProviders[0].ID == "" {
 		return nil, errors.Errorf("Provider must have an ID")
 	}
 
-	if c.SAMLProviders[len(c.SAMLProviders)-1].Label == "" {
+	if c.SAMLProviders[0].Label == "" {
 		return nil, errors.Errorf("Provider must have a label")
 	}
 
-	if c.SAMLProviders[len(c.SAMLProviders)-1].PrivateKeyPath == "" {
+	if c.SAMLProviders[0].PrivateKeyPath == "" {
 		return nil, errors.Errorf("Provider must have a private key")
 	}
 
-	if c.SAMLProviders[len(c.SAMLProviders)-1].PublicCertPath == "" {
+	if c.SAMLProviders[0].PublicCertPath == "" {
 		return nil, errors.Errorf("Provider must have a public certificate")
 	}
 
-	if c.SAMLProviders[len(c.SAMLProviders)-1].AttributesMap == nil || len(c.SAMLProviders[len(c.SAMLProviders)-1].AttributesMap) == 0 {
+	if c.SAMLProviders[0].AttributesMap == nil || len(c.SAMLProviders[0].AttributesMap) == 0 {
 		return nil, errors.Errorf("Provider must have an attributes map")
 	}
 
-	if c.SAMLProviders[len(c.SAMLProviders)-1].AttributesMap["id"] == "" {
-		return nil, errors.Errorf("ThYou must have an ID field in your attribute_map")
+	if c.SAMLProviders[0].AttributesMap["id"] == "" {
+		return nil, errors.Errorf("You must have an ID field in your attribute_map")
 	}
 
-	if c.SAMLProviders[len(c.SAMLProviders)-1].Mapper == "" {
+	if c.SAMLProviders[0].Mapper == "" {
 		return nil, errors.Errorf("Provider must have a mapper url")
 	}
 
-	return &c.SAMLProviders[len(c.SAMLProviders)-1], nil
+	return &c.SAMLProviders[0], nil
 }

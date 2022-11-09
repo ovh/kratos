@@ -122,7 +122,7 @@ func (m *ManagerRelayState) container(ctx context.Context, w http.ResponseWriter
 	}
 
 	if errors.Is(err, sqlcon.ErrNoRows) {
-		return nil, errors.WithStack(ErrNotResumable.WithDebugf("Resumable ID from RelayState could not be found in the datastore: %+v", err))
+		return nil, errors.WithStack(ErrNotResumable.WithDebug("Resumable ID from RelayState could not be found in the datastore"))
 	} else if err != nil {
 		return nil, err
 	}

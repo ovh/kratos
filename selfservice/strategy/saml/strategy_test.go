@@ -99,7 +99,7 @@ func TestProvider(t *testing.T) {
 	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
-	provider, err := strategy.Provider(context.Background(), "samlProviderTestID") //J'ai modif ca pour que ca build
+	provider, err := strategy.Provider(context.Background(), "samlProviderTestID")
 	require.NoError(t, err)
 	gotest.Check(t, provider != nil)
 	gotest.Check(t, provider.Config().ID == "samlProviderTestID")
@@ -181,7 +181,7 @@ func TestGetRegistrationIdentity(t *testing.T) {
 	middleware, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
-	provider, _ := strategy.Provider(context.Background(), "samlProviderTestID") // J'ai modif ca pour que ca build
+	provider, _ := strategy.Provider(context.Background(), "samlProviderTestID")
 	assertion, _ := GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
 	attributes, _ := strategy.GetAttributesFromAssertion(assertion)
 	claims, _ := provider.Claims(context.Background(), strategy.D().Config(), attributes)
@@ -285,4 +285,13 @@ func TestCountActiveFirstFactorCredentials(t *testing.T) {
 			assert.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+func TestModifyIdentityTraits(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	saml.DestroyMiddlewareIfExists()
+
 }

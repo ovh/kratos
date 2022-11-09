@@ -37,8 +37,7 @@ func (d *ProviderSAML) Claims(ctx context.Context, config *config.Config, attrib
 		Decode(&c); err != nil {
 		return nil, errors.Wrapf(err, "Unable to decode config %v", string(conf))
 	}
-
-	providerSAML := c.SAMLProviders[len(c.SAMLProviders)-1]
+	providerSAML := c.SAMLProviders[0]
 
 	claims := &Claims{
 		Issuer:        "saml",

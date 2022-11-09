@@ -221,6 +221,7 @@ func (s *Strategy) validateFlow(ctx context.Context, r *http.Request, rid uuid.U
 	return ar, err // this must return the error
 }
 
+// Check if the user is already authenticated
 func (s *Strategy) alreadyAuthenticated(w http.ResponseWriter, r *http.Request, req interface{}) bool {
 	// we assume an error means the user has no session
 	if _, err := s.d.SessionManager().FetchFromRequest(r.Context(), r); err == nil {
@@ -251,8 +252,9 @@ func (s *Strategy) validateCallback(w http.ResponseWriter, r *http.Request) (flo
 	return req, &cntnr, nil
 }
 
-// Handle /selfservice/methods/saml/acs | Receive SAML response, parse the attributes and start auth flow
+// Handle /selfservice/methods/saml/acs/:provider | Receive SAML response, parse the attributes and start auth flow
 func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	// We get the provider ID form the URL
 	pid := ps.ByName("provider")
 
 	if err := r.ParseForm(); err != nil {

@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/go-jsonnet"
 	"github.com/pkg/errors"
+	"github.com/tidwall/gjson"
 
 	"github.com/ory/herodot"
 	"github.com/ory/kratos/continuity"
@@ -54,6 +56,8 @@ type SubmitSelfServiceLoginFlowWithSAMLMethodBody struct {
 
 // Login and give a session to the user
 func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login.Flow, provider Provider, c *identity.Credentials, i *identity.Identity, claims *Claims) (*registration.Flow, error) {
+
+	s.updateIdentityTraits(i, provider, claims)
 
 	var o identity.CredentialsSAML
 	if err := json.NewDecoder(bytes.NewBuffer(c.Config)).Decode(&o); err != nil {
@@ -135,4 +139,31 @@ func (s *Strategy) PopulateLoginMethod(r *http.Request, requestedAAL identity.Au
 	}
 
 	return s.populateMethod(r, l.UI, text.NewInfoLoginWith)
+}
+
+// In order to do a JustInTimeProvisioning, it is important to update the identity traits at each new SAML connection
+func (s *Strategy) updateIdentityTraits(i *identity.Identity, provider Provider, claims *Claims) error {
+	jn, err := s.f.Fetch(provider.Config().Mapper)
+	if err != nil {
+		return nil
+	}
+
+	var jsonClaims bytes.Buffer
+	if err := json.NewEncoder(&jsonClaims).Encode(claims); err != nil {
+		return nil
+	}
+
+	vm := jsonnet.MakeVM()
+	vm.ExtCode("claims", jsonClaims.String())
+	evaluated, err := vm.EvaluateAnonymousSnippet(provider.Config().Mapper, jn.String())
+	if err != nil {
+		return err
+	} else if traits := gjson.Get(evaluated, "identity.traits"); !traits.IsObject() {
+		i.Traits = []byte{'{', '}'}
+		return errors.New("SAML Jsonnet mapper did not return an object for key identity.traits. Please check your Jsonnet code!")
+	} else {
+		i.Traits = []byte(traits.Raw)
+		return nil
+	}
+
 }
