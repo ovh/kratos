@@ -10,7 +10,7 @@ import (
 )
 
 type Provider interface {
-	Claims(ctx context.Context, config *config.Config, SAMLAttribute samlsp.Attributes) (*Claims, error)
+	Claims(ctx context.Context, config *config.Config, SAMLAttribute samlsp.Attributes, pid string) (*Claims, error)
 	Config() *Configuration
 }
 

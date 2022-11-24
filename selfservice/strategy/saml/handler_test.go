@@ -15,7 +15,7 @@ func TestInitMiddleWareWithMetadata(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	middleWare, _, _, err := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -23,7 +23,7 @@ func TestInitMiddleWareWithMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Check(t, middleWare != nil)
 	assert.Check(t, middleWare.ServiceProvider.IDPMetadata != nil)
-	assert.Check(t, middleWare.ServiceProvider.MetadataURL.Path == "/self-service/methods/saml/metadata")
+	assert.Check(t, middleWare.ServiceProvider.MetadataURL.Path == "/self-service/methods/saml/metadata/:provider")
 	assert.Check(t, middleWare.ServiceProvider.IDPMetadata.EntityID == "https://idp.testshib.org/idp/shibboleth")
 }
 
@@ -32,7 +32,7 @@ func TestInitMiddleWareWithoutMetadata(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	middleWare, _, _, err := InitTestMiddlewareWithoutMetadata(t,
 		"https://samltest.id/idp/profile/SAML2/Redirect/SSO",
@@ -43,7 +43,7 @@ func TestInitMiddleWareWithoutMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Check(t, middleWare != nil)
 	assert.Check(t, middleWare.ServiceProvider.IDPMetadata != nil)
-	assert.Check(t, middleWare.ServiceProvider.MetadataURL.Path == "/self-service/methods/saml/metadata")
+	assert.Check(t, middleWare.ServiceProvider.MetadataURL.Path == "/self-service/methods/saml/metadata/:provider")
 	assert.Check(t, middleWare.ServiceProvider.IDPMetadata.EntityID == "https://samltest.id/saml/idp")
 }
 
@@ -52,17 +52,17 @@ func TestGetMiddleware(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
-	middleWare, err := saml.GetMiddleware()
+	middleWare, err := saml.GetMiddleware("samlProvider")
 
 	require.NoError(t, err)
 	assert.Check(t, middleWare != nil)
 	assert.Check(t, middleWare.ServiceProvider.IDPMetadata != nil)
-	assert.Check(t, middleWare.ServiceProvider.MetadataURL.Path == "/self-service/methods/saml/metadata")
+	assert.Check(t, middleWare.ServiceProvider.MetadataURL.Path == "/self-service/methods/saml/metadata/:provider")
 	assert.Check(t, middleWare.ServiceProvider.IDPMetadata.EntityID == "https://idp.testshib.org/idp/shibboleth")
 }
 
@@ -71,7 +71,7 @@ func TestMustParseCertificate(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	certificate, err := ioutil.ReadFile("testdata/samlkratos.crt")
 	require.NoError(t, err)

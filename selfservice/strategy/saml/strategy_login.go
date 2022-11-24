@@ -119,10 +119,9 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 	}
 
 	if x.IsJSONRequest(r) {
-		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(RouteAuth))
+		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(RouteBaseAuth))
 	} else {
-
-		http.Redirect(w, r, RouteAuth, http.StatusSeeOther)
+		http.Redirect(w, r, RouteBaseAuth+"/"+pid, http.StatusSeeOther)
 	}
 
 	return nil, errors.WithStack(flow.ErrCompletedByStrategy)

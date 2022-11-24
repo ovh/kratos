@@ -112,8 +112,8 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 		t,
 		conf,
 		saml.Configuration{
-			ID:             "samlProviderTestID",
-			Label:          "samlProviderTestLabel",
+			ID:             "samlProvider",
+			Label:          "samlProviderLabel",
 			Provider:       "generic",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
@@ -131,9 +131,9 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	t.Logf("Kratos Public URL: %s", ts.URL)
 
 	// Instantiates the MiddleWare
-	_, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	_, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	require.NoError(t, err)
-	middleware, err := saml.GetMiddleware()
+	middleware, err := saml.GetMiddleware("samlProvider")
 	require.NoError(t, err)
 	middleware.ServiceProvider.Key = mustParsePrivateKey(golden.Get(t, "key.pem")).(*rsa.PrivateKey)
 	middleware.ServiceProvider.Certificate = mustParseCertificate(golden.Get(t, "cert.pem"))

@@ -43,14 +43,17 @@ import (
 const (
 	RouteBase = "/self-service/methods/saml"
 
-	RouteAcs      = RouteBase + "/acs/:provider"
-	RouteAuth     = RouteBase + "/auth"
-	RouteMetadata = RouteBase + "/metadata"
+	RouteBaseAcs      = RouteBase + "/acs"
+	RouteBaseAuth     = RouteBase + "/auth"
+	RouteBaseMetadata = RouteBase + "/metadata"
+
+	RouteAcs      = RouteBaseAcs + "/:provider"
+	RouteAuth     = RouteBaseAuth + "/:provider"
+	RouteMetadata = RouteBaseMetadata + "/:provider"
 )
 
 var _ identity.ActiveCredentialsCounter = new(Strategy)
 
-// SAMLTODO dependencies
 type registrationStrategyDependencies interface {
 	x.LoggingProvider
 	x.WriterProvider
@@ -271,7 +274,7 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 		return
 	}
 
-	m, err := GetMiddleware()
+	m, err := GetMiddleware(pid)
 	if err != nil {
 		s.forwardError(w, r, err)
 	}
@@ -298,7 +301,7 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 	}
 
 	// We translate SAML Attributes into claims (To create an identity we need these claims)
-	claims, err := provider.Claims(r.Context(), s.d.Config(), attributes)
+	claims, err := provider.Claims(r.Context(), s.d.Config(), attributes, pid)
 	if err != nil {
 		s.forwardError(w, r, err)
 		return

@@ -24,7 +24,7 @@ func TestGetAndDecryptAssertion(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	middleware, _, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -40,7 +40,7 @@ func TestGetAttributesFromAssertion(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	middleware, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -70,7 +70,7 @@ func TestCreateAuthRequest(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	middleware, _, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -94,16 +94,16 @@ func TestProvider(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
-	provider, err := strategy.Provider(context.Background(), "samlProviderTestID")
+	provider, err := strategy.Provider(context.Background(), "samlProvider")
 	require.NoError(t, err)
 	gotest.Check(t, provider != nil)
-	gotest.Check(t, provider.Config().ID == "samlProviderTestID")
-	gotest.Check(t, provider.Config().Label == "samlProviderTestLabel")
+	gotest.Check(t, provider.Config().ID == "samlProvider")
+	gotest.Check(t, provider.Config().Label == "samlProviderLabel")
 }
 
 func TestConfig(t *testing.T) {
@@ -111,7 +111,7 @@ func TestConfig(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -120,8 +120,8 @@ func TestConfig(t *testing.T) {
 	require.NoError(t, err)
 	gotest.Check(t, config != nil)
 	gotest.Check(t, len(config.SAMLProviders) == 1)
-	gotest.Check(t, config.SAMLProviders[0].ID == "samlProviderTestID")
-	gotest.Check(t, config.SAMLProviders[0].Label == "samlProviderTestLabel")
+	gotest.Check(t, config.SAMLProviders[0].ID == "samlProvider")
+	gotest.Check(t, config.SAMLProviders[0].Label == "samlProviderLabel")
 }
 
 func TestID(t *testing.T) {
@@ -129,7 +129,7 @@ func TestID(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -143,7 +143,7 @@ func TestCountActiveCredentials(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -176,15 +176,15 @@ func TestGetRegistrationIdentity(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	middleware, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
-	provider, _ := strategy.Provider(context.Background(), "samlProviderTestID")
+	provider, _ := strategy.Provider(context.Background(), "samlProvider")
 	assertion, _ := GetAndDecryptAssertion(t, "./testdata/SP_SamlResponse.xml", middleware.ServiceProvider.Key)
 	attributes, _ := strategy.GetAttributesFromAssertion(assertion)
-	claims, _ := provider.Claims(context.Background(), strategy.D().Config(), attributes)
+	claims, _ := provider.Claims(context.Background(), strategy.D().Config(), attributes, "samlProvider")
 
 	i, err := strategy.GetRegistrationIdentity(nil, context.Background(), provider, claims, false)
 	require.NoError(t, err)
@@ -292,6 +292,6 @@ func TestModifyIdentityTraits(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 }

@@ -68,11 +68,11 @@ func TestXmlMetadataExist(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, _, ts, err := InitTestMiddlewareWithMetadata(t, "file://testdata/SP_IDPMetadata.xml")
 	assert.NilError(t, err)
-	res, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	res, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	assert.NilError(t, err)
 	body, _ := ioutil.ReadAll(res.Body)
 	fmt.Println(body)
@@ -85,10 +85,10 @@ func TestXmlMetadataValues(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, _, ts, _ := InitTestMiddlewareWithMetadata(t, "file://testdata/SP_IDPMetadata.xml")
-	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := io.ReadAll(res.Body)
 
 	assert.Check(t, is.Equal(http.StatusOK, res.StatusCode))

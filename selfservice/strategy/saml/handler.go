@@ -33,7 +33,8 @@ import (
 )
 
 var ErrNoSession = errors.New("saml: session not present")
-var samlMiddleware *samlsp.Middleware
+
+var samlMiddlewares = make(map[string]*samlsp.Middleware)
 
 type ory_kratos_continuity struct{}
 
@@ -67,30 +68,28 @@ func NewHandler(d handlerDependencies) *Handler {
 }
 
 func (h *Handler) RegisterPublicRoutes(router *x.RouterPublic) {
-
-	h.d.CSRFHandler().IgnorePath(RouteAuth)
-	h.d.CSRFHandler().IgnoreGlob(RouteBase + "/acs/*")
+	h.d.CSRFHandler().IgnoreGlob(RouteBaseAcs + "/*")
 
 	router.GET(RouteMetadata, h.serveMetadata)
 	router.GET(RouteAuth, h.loginWithIdp)
-
 }
 
 // Handle /selfservice/methods/saml/metadata
 func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	config := h.d.Config()
-	if samlMiddleware == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config); err != nil {
+	pid := ps.ByName("provider")
+
+	if samlMiddlewares[pid] == nil {
+		if err := h.instantiateMiddleware(r.Context(), *config, pid); err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
-	buf, _ := xml.MarshalIndent(samlMiddleware.ServiceProvider.Metadata(), "", "  ")
+	buf, _ := xml.MarshalIndent(samlMiddlewares[pid].ServiceProvider.Metadata(), "", "  ")
 	w.Header().Set("Content-Type", "text/xml")
 	w.Write(buf)
-
 }
 
 // swagger:route GET /self-service/methods/saml/auth v0alpha2 initializeSelfServiceSamlFlowForBrowsers
@@ -108,8 +107,10 @@ func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httpr
 func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Middleware is a singleton so we have to verify that it exists
 	config := h.d.Config()
-	if samlMiddleware == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config); err != nil {
+	pid := ps.ByName("provider")
+
+	if samlMiddlewares[pid] == nil {
+		if err := h.instantiateMiddleware(r.Context(), *config, pid); err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -129,29 +130,29 @@ func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httpro
 	// Checks if the user already have an active session
 	if e := new(session.ErrNoActiveSessionFound); errors.As(e, &e) {
 		// No session exists yet, we start the auth flow and create the session
-		samlMiddleware.HandleStartAuthFlow(w, r)
+		samlMiddlewares[pid].HandleStartAuthFlow(w, r)
 	} else {
 		// A session already exist, we redirect to the main page
 		http.Redirect(w, r, config.SelfServiceBrowserDefaultReturnTo(r.Context()).Path, http.StatusTemporaryRedirect)
 	}
 }
 
-func DestroyMiddlewareIfExists() {
-	if samlMiddleware != nil {
-		samlMiddleware = nil
+func DestroyMiddlewareIfExists(pid string) {
+	if samlMiddlewares[pid] != nil {
+		samlMiddlewares[pid] = nil
 	}
 }
 
 // Instantiate the middleware SAML from the information in the configuration file
-func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Config) error {
+func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Config, pid string) error {
 
-	provider, err := CreateSAMLProvider(config, ctx)
+	providerConfig, err := CreateSAMLProviderConfig(config, ctx, pid)
 	if err != nil {
 		return err
 	}
 
 	// Key pair to encrypt and sign SAML requests
-	keyPair, err := tls.LoadX509KeyPair(strings.Replace(provider.PublicCertPath, "file://", "", 1), strings.Replace(provider.PrivateKeyPath, "file://", "", 1))
+	keyPair, err := tls.LoadX509KeyPair(strings.Replace(providerConfig.PublicCertPath, "file://", "", 1), strings.Replace(providerConfig.PrivateKeyPath, "file://", "", 1))
 	if err != nil {
 		return err
 	}
@@ -163,10 +164,10 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	var idpMetadata *samlidp.EntityDescriptor
 
 	// We check if the metadata file is provided
-	if provider.IDPInformation["idp_metadata_url"] != "" {
+	if providerConfig.IDPInformation["idp_metadata_url"] != "" {
 
 		// The metadata file is provided
-		metadataURL := provider.IDPInformation["idp_metadata_url"]
+		metadataURL := providerConfig.IDPInformation["idp_metadata_url"]
 		if strings.HasPrefix(metadataURL, "file://") {
 			metadataURL = strings.Replace(metadataURL, "file://", "", 1)
 			metadataURL = filepath.Clean(metadataURL)
@@ -193,28 +194,27 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 		}
 
 	} else {
-
 		// The metadata file is not provided
 		// So were are creating a minimalist IDP metadata based on what is provided by the user on the config file
-		entityIDURL, err := url.Parse(provider.IDPInformation["idp_entity_id"])
+		entityIDURL, err := url.Parse(providerConfig.IDPInformation["idp_entity_id"])
 		if err != nil {
 			return err
 		}
 
 		// The IDP SSO URL
-		IDPSSOURL, err := url.Parse(provider.IDPInformation["idp_sso_url"])
+		IDPSSOURL, err := url.Parse(providerConfig.IDPInformation["idp_sso_url"])
 		if err != nil {
 			return err
 		}
 
 		// The IDP Logout URL
-		IDPlogoutURL, err := url.Parse(provider.IDPInformation["idp_logout_url"])
+		IDPlogoutURL, err := url.Parse(providerConfig.IDPInformation["idp_logout_url"])
 		if err != nil {
 			return err
 		}
 
 		// The certificate of the IDP
-		certificate, err := ioutil.ReadFile(strings.Replace(provider.IDPInformation["idp_certificate_path"], "file://", "", 1))
+		certificate, err := ioutil.ReadFile(strings.Replace(providerConfig.IDPInformation["idp_certificate_path"], "file://", "", 1))
 		if err != nil {
 			return err
 		}
@@ -276,8 +276,8 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	var publicUrlString = config.SelfPublicURL(ctx).String()
 
 	// Sometimes there is an issue with double slash into the url so we prevent it
-	// Crewjam library use default route for ACS and metadat but we want to overwrite them
-	RouteSamlAcsWithSlash := strings.Replace(RouteAcs, ":provider", provider.ID, 1)
+	// Crewjam library use default route for ACS and metadata but we want to overwrite them
+	RouteSamlAcsWithSlash := strings.Replace(RouteAcs, ":provider", providerConfig.ID, 1)
 	if publicUrlString[len(publicUrlString)-1] != '/' {
 
 		u, err := url.Parse(publicUrlString + RouteSamlAcsWithSlash)
@@ -309,17 +309,17 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	// The issuer format is unspecified
 	samlMiddleWare.ServiceProvider.AuthnNameIDFormat = samlidp.UnspecifiedNameIDFormat
 
-	samlMiddleware = samlMiddleWare
+	samlMiddlewares[pid] = samlMiddleWare
 
 	return nil
 }
 
 // Return the singleton MiddleWare
-func GetMiddleware() (*samlsp.Middleware, error) {
-	if samlMiddleware == nil {
+func GetMiddleware(pid string) (*samlsp.Middleware, error) {
+	if samlMiddlewares[pid] == nil {
 		return nil, errors.Errorf("An error occurred while retrieving the middeware, it is null")
 	}
-	return samlMiddleware, nil
+	return samlMiddlewares[pid], nil
 }
 
 func MustParseCertificate(pemStr []byte) (*x509.Certificate, error) {
@@ -335,7 +335,7 @@ func MustParseCertificate(pemStr []byte) (*x509.Certificate, error) {
 }
 
 // Create a SAMLProvider object from the config file
-func CreateSAMLProvider(config config.Config, ctx context.Context) (*Configuration, error) {
+func CreateSAMLProviderConfig(config config.Config, ctx context.Context, pid string) (*Configuration, error) {
 	var c ConfigurationCollection
 	conf := config.SelfServiceStrategy(ctx, "saml").Config
 	if err := jsonx.
@@ -344,51 +344,57 @@ func CreateSAMLProvider(config config.Config, ctx context.Context) (*Configurati
 		return nil, errors.Wrapf(err, "Unable to decode config %v", string(conf))
 	}
 
-	if len(c.SAMLProviders) != 1 {
+	if len(c.SAMLProviders) == 0 {
 		return nil, errors.Errorf("Please indicate a SAML Identity Provider in your configuration file")
 	}
 
-	if c.SAMLProviders[0].IDPInformation == nil {
+	providerConfig, err := c.ProviderConfig(pid)
+	if err != nil {
+		return nil, err
+	}
+
+	if providerConfig.IDPInformation == nil {
 		return nil, errors.Errorf("Please include your Identity Provider information in the configuration file.")
 	}
 
-	_, sso_exists := c.SAMLProviders[0].IDPInformation["idp_sso_url"]
-	_, entity_id_exists := c.SAMLProviders[0].IDPInformation["idp_entity_id"]
-	_, certificate_exists := c.SAMLProviders[0].IDPInformation["idp_certificate_path"]
-	_, logout_url_exists := c.SAMLProviders[0].IDPInformation["idp_logout_url"]
-	_, metadata_exists := c.SAMLProviders[0].IDPInformation["idp_metadata_url"]
+	// _, sso_exists := providerConfig.IDPInformation["idp_sso_url"]
+	_, sso_exists := providerConfig.IDPInformation["idp_sso_url"]
+	_, entity_id_exists := providerConfig.IDPInformation["idp_entity_id"]
+	_, certificate_exists := providerConfig.IDPInformation["idp_certificate_path"]
+	_, logout_url_exists := providerConfig.IDPInformation["idp_logout_url"]
+	_, metadata_exists := providerConfig.IDPInformation["idp_metadata_url"]
 
-	if (!metadata_exists && (!sso_exists || !entity_id_exists || !certificate_exists || !logout_url_exists)) || len(c.SAMLProviders[0].IDPInformation) > 4 {
+	if (!metadata_exists && (!sso_exists || !entity_id_exists || !certificate_exists || !logout_url_exists)) || len(providerConfig.IDPInformation) > 4 {
 		return nil, errors.Errorf("Please check your IDP information in the configuration file")
 	}
 
-	if c.SAMLProviders[0].ID == "" {
+	if providerConfig.ID == "" {
 		return nil, errors.Errorf("Provider must have an ID")
 	}
 
-	if c.SAMLProviders[0].Label == "" {
+	if providerConfig.Label == "" {
 		return nil, errors.Errorf("Provider must have a label")
 	}
 
-	if c.SAMLProviders[0].PrivateKeyPath == "" {
+	if providerConfig.PrivateKeyPath == "" {
 		return nil, errors.Errorf("Provider must have a private key")
 	}
 
-	if c.SAMLProviders[0].PublicCertPath == "" {
+	if providerConfig.PublicCertPath == "" {
 		return nil, errors.Errorf("Provider must have a public certificate")
 	}
 
-	if c.SAMLProviders[0].AttributesMap == nil || len(c.SAMLProviders[0].AttributesMap) == 0 {
+	if providerConfig.AttributesMap == nil || len(providerConfig.AttributesMap) == 0 {
 		return nil, errors.Errorf("Provider must have an attributes map")
 	}
 
-	if c.SAMLProviders[0].AttributesMap["id"] == "" {
+	if providerConfig.AttributesMap["id"] == "" {
 		return nil, errors.Errorf("You must have an ID field in your attribute_map")
 	}
 
-	if c.SAMLProviders[0].Mapper == "" {
+	if providerConfig.Mapper == "" {
 		return nil, errors.Errorf("Provider must have a mapper url")
 	}
 
-	return &c.SAMLProviders[0], nil
+	return providerConfig, nil
 }

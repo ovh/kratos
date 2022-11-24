@@ -55,3 +55,13 @@ func (c ConfigurationCollection) Provider(id string, reg registrationStrategyDep
 	}
 	return nil, errors.WithStack(herodot.ErrNotFound.WithReasonf(`SAML Provider "%s" is unknown or has not been configured`, id))
 }
+
+func (c ConfigurationCollection) ProviderConfig(id string) (*Configuration, error) {
+	for k := range c.SAMLProviders {
+		p := c.SAMLProviders[k]
+		if p.ID == id {
+			return &p, nil
+		}
+	}
+	return nil, errors.WithStack(herodot.ErrNotFound.WithReasonf(`SAML Provider "%s" is unknown or has not been configured`, id))
+}

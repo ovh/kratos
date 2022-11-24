@@ -15,7 +15,7 @@ import (
 )
 
 func TestInitSAMLWithoutProvider(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -50,13 +50,13 @@ func TestInitSAMLWithoutProvider(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please indicate a SAML Identity Provider in your configuration file")
 }
 
 func TestInitSAMLWithoutPoviderID(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -83,7 +83,7 @@ func TestInitSAMLWithoutPoviderID(t *testing.T) {
 		conf,
 		saml.Configuration{
 			ID:             "",
-			Label:          "samlProviderTestLabel",
+			Label:          "samlProviderLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
 			Mapper:         "file://testdata/saml.jsonnet",
@@ -100,13 +100,13 @@ func TestInitSAMLWithoutPoviderID(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
-	assert.Contains(t, string(body), "Provider must have an ID")
+	assert.Contains(t, string(body), "\"code\":404,\"status\":\"Not Found\"")
 }
 
 func TestInitSAMLWithoutPoviderLabel(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -132,7 +132,7 @@ func TestInitSAMLWithoutPoviderLabel(t *testing.T) {
 		t,
 		conf,
 		saml.Configuration{
-			ID:             "samlProviderTestID",
+			ID:             "samlProvider",
 			Label:          "",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
@@ -150,13 +150,13 @@ func TestInitSAMLWithoutPoviderLabel(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Provider must have a label")
 }
 
 func TestAttributesMapWithoutID(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -181,8 +181,8 @@ func TestAttributesMapWithoutID(t *testing.T) {
 		t,
 		conf,
 		saml.Configuration{
-			ID:             "samlProviderTestID",
-			Label:          "samlProviderTestLabel",
+			ID:             "samlProvider",
+			Label:          "samlProviderLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
 			Mapper:         "file://testdata/saml.jsonnet",
@@ -199,14 +199,14 @@ func TestAttributesMapWithoutID(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "You must have an ID field in your attribute_map")
 
 }
 
 func TestAttributesMapWithAnExtraField(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -233,8 +233,8 @@ func TestAttributesMapWithAnExtraField(t *testing.T) {
 		t,
 		conf,
 		saml.Configuration{
-			ID:             "samlProviderTestID",
-			Label:          "samlProviderTestLabel",
+			ID:             "samlProvider",
+			Label:          "samlProviderLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
 			Mapper:         "file://testdata/saml.jsonnet",
@@ -251,14 +251,14 @@ func TestAttributesMapWithAnExtraField(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "metadata")
 
 }
 
 func TestInitSAMLWithoutIDPInformation(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -278,8 +278,8 @@ func TestInitSAMLWithoutIDPInformation(t *testing.T) {
 		t,
 		conf,
 		saml.Configuration{
-			ID:             "samlProviderTestID",
-			Label:          "samlProviderTestLabel",
+			ID:             "samlProvider",
+			Label:          "samlProviderLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
 			Mapper:         "file://testdata/saml.jsonnet",
@@ -295,13 +295,13 @@ func TestInitSAMLWithoutIDPInformation(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please include your Identity Provider information in the configuration file.")
 }
 
 func TestInitSAMLWithMissingIDPInformationField(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -326,8 +326,8 @@ func TestInitSAMLWithMissingIDPInformationField(t *testing.T) {
 		t,
 		conf,
 		saml.Configuration{
-			ID:             "samlProviderTestID",
-			Label:          "samlProviderTestLabel",
+			ID:             "samlProvider",
+			Label:          "samlProviderLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
 			Mapper:         "file://testdata/saml.jsonnet",
@@ -344,13 +344,13 @@ func TestInitSAMLWithMissingIDPInformationField(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please check your IDP information in the configuration file")
 }
 
 func TestInitSAMLWithExtraIDPInformationField(t *testing.T) {
-	saml.DestroyMiddlewareIfExists()
+	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
@@ -377,8 +377,8 @@ func TestInitSAMLWithExtraIDPInformationField(t *testing.T) {
 		t,
 		conf,
 		saml.Configuration{
-			ID:             "samlProviderTestID",
-			Label:          "samlProviderTestLabel",
+			ID:             "samlProvider",
+			Label:          "samlProviderLabel",
 			PublicCertPath: "file://testdata/myservice.cert",
 			PrivateKeyPath: "file://testdata/myservice.key",
 			Mapper:         "file://testdata/saml.jsonnet",
@@ -395,7 +395,7 @@ func TestInitSAMLWithExtraIDPInformationField(t *testing.T) {
 	t.Logf("Kratos Public URL: %s", ts.URL)
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
-	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata")
+	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	body, _ := ioutil.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please check your IDP information in the configuration file")
 }

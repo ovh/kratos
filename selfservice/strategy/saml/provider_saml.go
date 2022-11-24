@@ -27,7 +27,7 @@ func NewProviderSAML(
 }
 
 // Translate attributes from saml asseryion into kratos claims
-func (d *ProviderSAML) Claims(ctx context.Context, config *config.Config, attributeSAML samlsp.Attributes) (*Claims, error) {
+func (d *ProviderSAML) Claims(ctx context.Context, config *config.Config, attributeSAML samlsp.Attributes, pid string) (*Claims, error) {
 
 	var c ConfigurationCollection
 
@@ -37,21 +37,25 @@ func (d *ProviderSAML) Claims(ctx context.Context, config *config.Config, attrib
 		Decode(&c); err != nil {
 		return nil, errors.Wrapf(err, "Unable to decode config %v", string(conf))
 	}
-	providerSAML := c.SAMLProviders[0]
+
+	providerConfig, err := c.ProviderConfig(pid)
+	if err != nil {
+		return nil, err
+	}
 
 	claims := &Claims{
 		Issuer:        "saml",
-		Subject:       attributeSAML.Get(providerSAML.AttributesMap["id"]),
-		Name:          attributeSAML.Get(providerSAML.AttributesMap["firstname"]),
-		LastName:      attributeSAML.Get(providerSAML.AttributesMap["lastname"]),
-		Nickname:      attributeSAML.Get(providerSAML.AttributesMap["nickname"]),
-		Gender:        attributeSAML.Get(providerSAML.AttributesMap["gender"]),
-		Birthdate:     attributeSAML.Get(providerSAML.AttributesMap["birthdate"]),
-		Picture:       attributeSAML.Get(providerSAML.AttributesMap["picture"]),
-		Email:         attributeSAML.Get(providerSAML.AttributesMap["email"]),
-		Roles:         attributeSAML[providerSAML.AttributesMap["roles"]],
-		Groups:        attributeSAML[providerSAML.AttributesMap["groups"]],
-		PhoneNumber:   attributeSAML.Get(providerSAML.AttributesMap["phone_number"]),
+		Subject:       attributeSAML.Get(providerConfig.AttributesMap["id"]),
+		Name:          attributeSAML.Get(providerConfig.AttributesMap["firstname"]),
+		LastName:      attributeSAML.Get(providerConfig.AttributesMap["lastname"]),
+		Nickname:      attributeSAML.Get(providerConfig.AttributesMap["nickname"]),
+		Gender:        attributeSAML.Get(providerConfig.AttributesMap["gender"]),
+		Birthdate:     attributeSAML.Get(providerConfig.AttributesMap["birthdate"]),
+		Picture:       attributeSAML.Get(providerConfig.AttributesMap["picture"]),
+		Email:         attributeSAML.Get(providerConfig.AttributesMap["email"]),
+		Roles:         attributeSAML[providerConfig.AttributesMap["roles"]],
+		Groups:        attributeSAML[providerConfig.AttributesMap["groups"]],
+		PhoneNumber:   attributeSAML.Get(providerConfig.AttributesMap["phone_number"]),
 		EmailVerified: true,
 	}
 
