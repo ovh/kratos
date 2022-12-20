@@ -87,80 +87,41 @@ func mustParseURL(s string) url.URL {
 	return *rv
 }
 
-func NewIdentifyProviderTest(t *testing.T, spURL string) *IdentityProviderTest {
-	test := IdentityProviderTest{}
+func setSAMLTimeNow(timeStr string) {
 	TimeNow = func() time.Time {
-		rv, _ := time.Parse("Mon Jan 2 15:04:05.999999999 MST 2006", "Wed Jan 1 01:57:09.123456789 UTC 2014")
+		rv, _ := time.Parse("Mon Jan 2 15:04:05.999999999 MST 2006", timeStr)
 		return rv
 	}
 
 	saml.TimeNow = TimeNow
 	jwt.TimeFunc = TimeNow
 	saml.Clock = dsig.NewFakeClockAt(TimeNow())
+}
 
-	RandReader = &testRandomReader{}                // TODO(ross): remove this and use the below generator
-	xmlenc.RandReader = rand.New(rand.NewSource(0)) // nolint:gosec  // deterministic random numbers for tests
-
-	test.SPKey = mustParsePrivateKey(golden.Get(t, "key.pem")).(*rsa.PrivateKey)
-	test.SPCertificate = mustParseCertificate(golden.Get(t, "cert.pem"))
-	test.SP = saml.ServiceProvider{
-		Key:         test.SPKey,
-		Certificate: test.SPCertificate,
-		MetadataURL: mustParseURL("https://sp.example.com/saml2/metadata"),
-		AcsURL:      mustParseURL(spURL + "/self-service/methods/saml/acs/samlProvider"),
-		IDPMetadata: &saml.EntityDescriptor{},
+func (test *MiddlewareTest) makeTrackedRequest(id string) string {
+	codec := test.Middleware.RequestTracker.(samlsp.CookieRequestTracker).Codec
+	token, err := codec.Encode(samlsp.TrackedRequest{
+		Index:         "KCosLjAyNDY4Ojw-QEJERkhKTE5QUlRWWFpcXmBiZGZoamxucHJ0dnh6",
+		SAMLRequestID: id,
+		URI:           "/frob",
+	})
+	if err != nil {
+		panic(err)
 	}
-
-	test.Key = mustParsePrivateKey(golden.Get(t, "idp_key.pem"))
-	test.Certificate = mustParseCertificate(golden.Get(t, "idp_cert.pem"))
-
-	test.IDP = saml.IdentityProvider{
-		Key:         test.Key,
-		Certificate: test.Certificate,
-		Logger:      logger.DefaultLogger,
-		MetadataURL: mustParseURL("https://idp.example.com/saml/metadata"),
-		SSOURL:      mustParseURL("https://idp.example.com/saml/sso"),
-		ServiceProviderProvider: &mockServiceProviderProvider{
-			GetServiceProviderFunc: func(r *http.Request, serviceProviderID string) (*saml.EntityDescriptor, error) {
-				if serviceProviderID == test.SP.MetadataURL.String() {
-					return test.SP.Metadata(), nil
-				}
-				return nil, os.ErrNotExist
-			},
-		},
-		SessionProvider: &mockSessionProvider{
-			GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
-				return nil
-			},
-		},
-	}
-
-	// bind the service provider and the IDP
-	test.SP.IDPMetadata = test.IDP.Metadata()
-	return &test
+	return token
 }
 
 func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *httptest.Server) {
-	test := MiddlewareTest{}
-
-	TimeNow = func() time.Time {
-		rv, _ := time.Parse("Mon Jan 2 15:04:05.999999999 MST 2006", "Wed Jan 1 01:57:09.123456789 UTC 2014")
-		return rv
-	}
-	saml.TimeNow = TimeNow
-	jwt.TimeFunc = TimeNow
-	saml.Clock = dsig.NewFakeClockAt(TimeNow())
+	middlewareTest := MiddlewareTest{}
 
 	saml.RandReader = &testRandomReader{}
 
-	//test.AuthnRequest = golden.Get(t, "authn_request.url")
-	//test.SamlResponse = golden.Get(t, "saml_response.xml")
-	test.Key = mustParsePrivateKey(golden.Get(t, "key.pem")).(*rsa.PrivateKey)
-	test.Certificate = mustParseCertificate(golden.Get(t, "cert.pem"))
-	test.IDPMetadata = golden.Get(t, "idp_metadata.xml")
+	middlewareTest.Key = mustParsePrivateKey(golden.Get(t, "sp_key.pem")).(*rsa.PrivateKey)
+	middlewareTest.Certificate = mustParseCertificate(golden.Get(t, "sp_cert.pem"))
+	middlewareTest.IDPMetadata = golden.Get(t, "idp_metadata.xml")
 
 	var metadata saml.EntityDescriptor
-	if err := xml.Unmarshal(test.IDPMetadata, &metadata); err != nil {
+	if err := xml.Unmarshal(middlewareTest.IDPMetadata, &metadata); err != nil {
 		panic(err)
 	}
 
@@ -168,7 +129,7 @@ func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *httptest.Server) {
 	if err != nil {
 		return nil, nil
 	}
-	test.Middleware = middleWare
+	middlewareTest.Middleware = middleWare
 
 	opts := samlsp.Options{
 		URL:         middleWare.ServiceProvider.AcsURL,
@@ -185,37 +146,74 @@ func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *httptest.Server) {
 	sessionCodec.MaxAge = 7200 * time.Second
 	sessionProvider.Codec = sessionCodec
 
-	test.Middleware.Session = sessionProvider
+	middlewareTest.Middleware.Session = sessionProvider
 
 	var tc samlsp.JWTSessionClaims
 	if err := json.Unmarshal(golden.Get(t, "token.json"), &tc); err != nil {
 		panic(err)
 	}
-	test.expectedSessionCookie, err = sessionProvider.Codec.Encode(tc)
+	middlewareTest.expectedSessionCookie, err = sessionProvider.Codec.Encode(tc)
 	if err != nil {
 		panic(err)
 	}
 
-	return &test, ts
+	return &middlewareTest, ts
 }
 
-func (test *MiddlewareTest) makeTrackedRequest(id string) string {
-	codec := test.Middleware.RequestTracker.(samlsp.CookieRequestTracker).Codec
-	token, err := codec.Encode(samlsp.TrackedRequest{
-		Index:         "KCosLjAyNDY4Ojw-QEJERkhKTE5QUlRWWFpcXmBiZGZoamxucHJ0dnh6",
-		SAMLRequestID: id,
-		URI:           "/frob",
-	})
-	if err != nil {
-		panic(err)
+func NewIdentifyProviderTest(t *testing.T, serviceProvider *saml.ServiceProvider, tsURL string) *IdentityProviderTest {
+	IDPtest := IdentityProviderTest{}
+
+	RandReader = &testRandomReader{}                // TODO(ross): remove this and use the below generator
+	xmlenc.RandReader = rand.New(rand.NewSource(0)) // nolint:gosec  // deterministic random numbers for tests
+
+	IDPtest.SP = *serviceProvider
+	IDPtest.SPKey = IDPtest.SP.Key
+	IDPtest.SPCertificate = IDPtest.SP.Certificate
+	/*test.SPKey = mustParsePrivateKey(golden.Get(t, "key.pem")).(*rsa.PrivateKey)
+	test.SPCertificate = mustParseCertificate(golden.Get(t, "cert.pem"))*/
+	/*test.SP = saml.ServiceProvider{
+		Key:         test.SPKey,
+		Certificate: test.SPCertificate,
+		MetadataURL: mustParseURL("https://sp.example.com/saml2/metadata"),
+		AcsURL:      mustParseURL(tsURL + "/self-service/methods/saml/acs/samlProvider"),
+		IDPMetadata: &saml.EntityDescriptor{},
+	}*/
+
+	IDPtest.Key = mustParsePrivateKey(golden.Get(t, "idp_key.pem"))
+	IDPtest.Certificate = mustParseCertificate(golden.Get(t, "idp_cert.pem"))
+
+	IDPtest.IDP = saml.IdentityProvider{
+		Key:         IDPtest.Key,
+		Certificate: IDPtest.Certificate,
+		Logger:      logger.DefaultLogger,
+		MetadataURL: mustParseURL("https://idp.example.com/saml/metadata"),
+		SSOURL:      mustParseURL("https://idp.example.com/saml/sso"),
+		ServiceProviderProvider: &mockServiceProviderProvider{
+			GetServiceProviderFunc: func(r *http.Request, serviceProviderID string) (*saml.EntityDescriptor, error) {
+				if serviceProviderID == IDPtest.SP.MetadataURL.String() {
+					return IDPtest.SP.Metadata(), nil
+				}
+				return nil, os.ErrNotExist
+			},
+		},
+		SessionProvider: &mockSessionProvider{
+			GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
+				return nil
+			},
+		},
 	}
-	return token
+
+	// bind the service provider and the IDP
+	IDPtest.SP.IDPMetadata = IDPtest.IDP.Metadata()
+	return &IDPtest
 }
 
 func TestMiddlewareCanParseResponse(t *testing.T) {
+	setSAMLTimeNow("Wed Jan 1 01:57:09.123456789 UTC 2014")
+
 	// The purpose is to generate the answer ourselves using Crewjam as an IDP
 	testMiddleware, ts := NewMiddlewareTest(t)
-	testIDP := NewIdentifyProviderTest(t, ts.URL)
+	testIDP := NewIdentifyProviderTest(t, &testMiddleware.Middleware.ServiceProvider, ts.URL)
 
 	buf, _ := xml.MarshalIndent(testIDP.IDP.Metadata(), "", "  ")
 	fmt.Println("----------------------")
@@ -233,7 +231,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 			"  IssueInstant=\"2014-01-01T01:57:09Z\" ProtocolBinding=\"\" " +
 			"  Version=\"2.0\">" +
 			"  <Issuer xmlns=\"urn:oasis:names:tc:SAML:2.0:assertion\" " +
-			"    Format=\"urn:oasis:names:tc:SAML:2.0:nameid-format:entity\">https://sp.example.com/saml2/metadata</Issuer>" +
+			"    Format=\"urn:oasis:names:tc:SAML:2.0:nameid-format:entity\">" + testMiddleware.Middleware.ServiceProvider.EntityID + "</Issuer>" +
 			"  <NameIDPolicy xmlns=\"urn:oasis:names:tc:SAML:2.0:protocol\" " +
 			"    AllowCreate=\"true\">urn:oasis:names:tc:SAML:2.0:nameid-format:transient</NameIDPolicy>" +
 			"</AuthnRequest>"),
