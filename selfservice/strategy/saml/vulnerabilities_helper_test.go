@@ -80,17 +80,20 @@ func setSAMLTimeNow(timeStr string) {
 	saml.Clock = dsig.NewFakeClockAt(TimeNow())
 }
 
-func (test *MiddlewareTest) makeTrackedRequest(id string) string {
+func (test *MiddlewareTest) makeTrackedRequest(id string) (string, string) {
+	uuid, _ := uuid.NewV4()
+
 	codec := test.Middleware.RequestTracker.(samlsp.CookieRequestTracker).Codec
+	index := uuid.String()
 	token, err := codec.Encode(samlsp.TrackedRequest{
-		Index:         "KCosLjAyNDY4Ojw-QEJERkhKTE5QUlRWWFpcXmBiZGZoamxucHJ0dnh6",
+		Index:         index,
 		SAMLRequestID: id,
 		URI:           "/frob",
 	})
 	if err != nil {
 		panic(err)
 	}
-	return token
+	return token, index
 }
 
 func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *httptest.Server) {

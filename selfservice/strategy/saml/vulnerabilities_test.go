@@ -61,10 +61,13 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 	req, err = http.NewRequest(req.Method, req.URL.String(), bytes.NewReader([]byte(v1.Encode())))
 	assert.NilError(t, err)
 
+	// Make tracked request and get its index
+	trackedRequestToken, trackedRequestIndex := testMiddleware.makeTrackedRequest(authnRequestID)
+
 	// Set SAML AuthnRequest HTTP Request headers Content-Type and session cookie
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Cookie", ""+
-		"saml_KCosLjAyNDY4Ojw-QEJERkhKTE5QUlRWWFpcXmBiZGZoamxucHJ0dnh6="+testMiddleware.makeTrackedRequest(authnRequestID))
+		"saml_"+trackedRequestIndex+"="+trackedRequestToken)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
