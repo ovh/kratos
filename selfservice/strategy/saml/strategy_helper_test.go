@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
-	"gotest.tools/golden"
 
 	"github.com/ory/kratos/driver/config"
 	"github.com/ory/kratos/identity"
@@ -116,8 +115,8 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 			ID:             "samlProvider",
 			Label:          "samlProviderLabel",
 			Provider:       "generic",
-			PublicCertPath: "file://testdata/myservice.cert",
-			PrivateKeyPath: "file://testdata/myservice.key",
+			PublicCertPath: "file://testdata/sp_cert.pem",
+			PrivateKeyPath: "file://testdata/sp_key.pem",
 			Mapper:         "file://testdata/saml.jsonnet",
 			AttributesMap:  attributesMap,
 			IDPInformation: idpInformation,
@@ -136,8 +135,8 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	require.NoError(t, err)
 	middleware, err := saml.GetMiddleware("samlProvider")
 	require.NoError(t, err)
-	middleware.ServiceProvider.Key = mustParsePrivateKey(golden.Get(t, "key.pem")).(*rsa.PrivateKey)
-	middleware.ServiceProvider.Certificate = mustParseCertificate(golden.Get(t, "cert.pem"))
+	//middleware.ServiceProvider.Key = mustParsePrivateKey(golden.Get(t, "sp_key.pem")).(*rsa.PrivateKey)
+	//middleware.ServiceProvider.Certificate = mustParseCertificate(golden.Get(t, "sp_cert.pem"))
 
 	return middleware, strategy, ts, err
 }
