@@ -4,7 +4,6 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
@@ -25,13 +24,12 @@ import (
 )
 
 type MiddlewareTest struct {
-	AuthnRequest          []byte
-	SamlResponse          []byte
-	Key                   *rsa.PrivateKey
-	Certificate           *x509.Certificate
-	IDPMetadata           []byte
-	Middleware            *samlsp.Middleware
-	expectedSessionCookie string
+	AuthnRequest []byte
+	SamlResponse []byte
+	Key          *rsa.PrivateKey
+	Certificate  *x509.Certificate
+	IDPMetadata  []byte
+	Middleware   *samlsp.Middleware
 }
 
 type IdentityProviderTest struct {
@@ -39,14 +37,9 @@ type IdentityProviderTest struct {
 	SPCertificate *x509.Certificate
 	SP            saml.ServiceProvider
 
-	Key             crypto.PrivateKey
-	Certificate     *x509.Certificate
-	SessionProvider saml.SessionProvider
-	IDP             saml.IdentityProvider
-}
-
-type mockSessionProvider struct {
-	GetSessionFunc func(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session
+	Key         crypto.PrivateKey
+	Certificate *x509.Certificate
+	IDP         saml.IdentityProvider
 }
 
 type mockServiceProviderProvider struct {
@@ -55,10 +48,6 @@ type mockServiceProviderProvider struct {
 
 func (mspp *mockServiceProviderProvider) GetServiceProvider(r *http.Request, serviceProviderID string) (*saml.EntityDescriptor, error) {
 	return mspp.GetServiceProviderFunc(r, serviceProviderID)
-}
-
-func (msp *mockSessionProvider) GetSession(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
-	return msp.GetSessionFunc(w, r, req)
 }
 
 func mustParseURL(s string) url.URL {
@@ -115,32 +104,6 @@ func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *httptest.Server) {
 		panic(err)
 	}
 
-	opts := samlsp.Options{
-		URL:         middleWare.ServiceProvider.AcsURL,
-		Key:         middleWare.ServiceProvider.Key,
-		Certificate: middleWare.ServiceProvider.Certificate,
-		IDPMetadata: &metadata,
-	}
-
-	sessionProvider := samlsp.DefaultSessionProvider(opts)
-	sessionProvider.Name = "ttt"
-	sessionProvider.MaxAge = 7200 * time.Second
-
-	sessionCodec := sessionProvider.Codec.(samlsp.JWTSessionCodec)
-	sessionCodec.MaxAge = 7200 * time.Second
-	sessionProvider.Codec = sessionCodec
-
-	middlewareTest.Middleware.Session = sessionProvider
-
-	var tc samlsp.JWTSessionClaims
-	if err := json.Unmarshal(golden.Get(t, "token.json"), &tc); err != nil {
-		panic(err)
-	}
-	middlewareTest.expectedSessionCookie, err = sessionProvider.Codec.Encode(tc)
-	if err != nil {
-		panic(err)
-	}
-
 	return &middlewareTest, ts
 }
 
@@ -166,11 +129,6 @@ func NewIdentifyProviderTest(t *testing.T, serviceProvider saml.ServiceProvider,
 					return IDPtest.SP.Metadata(), nil
 				}
 				return nil, os.ErrNotExist
-			},
-		},
-		SessionProvider: &mockSessionProvider{
-			GetSessionFunc: func(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
-				return nil
 			},
 		},
 	}
