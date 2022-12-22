@@ -12,53 +12,88 @@ import (
 )
 
 func TestMiddlewareCanParseResponse(t *testing.T) {
-	testMiddleware, authnRequest, authnRequestID := PrepareTestSAMLResponse(t)
+	// Create the SP, the IdP and the AnthnRequest
+	testMiddleware, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
-	// Get Response Element
-	responseEl := authnRequest.ResponseEl
-	doc := etree.NewDocument()
-	doc.SetRoot(responseEl)
+	t.Run("case=happy path", func(t *testing.T) {
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
 
-	// Get Reponse string
-	responseStr, err := doc.WriteToString()
-	assert.NilError(t, err)
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
+		doc := etree.NewDocument()
+		doc.SetRoot(responseEl)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		assert.NilError(t, err)
 
-	// Send the SAML Response to the SP ACS
-	resp := httptest.NewRecorder()
-	testMiddleware.Middleware.ServeHTTP(resp, req)
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
 
-	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, is.Equal(http.StatusFound, resp.Code))
-}
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-func TestMiddlewareParseModifiedResponse(t *testing.T) {
-	testMiddleware, authnRequest, authnRequestID := PrepareTestSAMLResponse(t)
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, is.Equal(http.StatusFound, resp.Code))
+	})
 
-	// Get Response Element
-	responseEl := authnRequest.ResponseEl
+	t.Run("case=add saml response attribute", func(t *testing.T) {
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
 
-	// Add an attribute to the Response
-	responseEl.CreateAttr("newAttr", "randomValue")
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
 
-	doc := etree.NewDocument()
-	doc.SetRoot(responseEl)
+		// Add an attribute to the Response
+		responseEl.CreateAttr("newAttr", "randomValue")
 
-	// Get Reponse string
-	responseStr, err := doc.WriteToString()
-	assert.NilError(t, err)
+		doc := etree.NewDocument()
+		doc.SetRoot(responseEl)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		assert.NilError(t, err)
 
-	// Send the SAML Response to the SP ACS
-	resp := httptest.NewRecorder()
-	testMiddleware.Middleware.ServeHTTP(resp, req)
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
 
-	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-	/**
-	* TODO check signature is invalid error
-	 */
+		// The assertion has been modified, the signature is invalid, so the HTTP Response code is 403 (Forbidden status)
+		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+
+		/**
+		* TODO check signature is invalid error
+		 */
+	})
+
+	t.Run("case=change saml response indent", func(t *testing.T) {
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
+		doc := etree.NewDocument()
+		doc.SetRoot(responseEl)
+		doc.Indent(2) // AHAHAHAHAHAHAHAH
+
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		assert.NilError(t, err)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		// The assertion has been modified, the signature is invalid, so the HTTP Response code is 403 (Forbidden status)
+		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+
+		/**
+		* TODO check signature is invalid error
+		 */
+	})
 }

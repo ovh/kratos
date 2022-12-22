@@ -179,7 +179,7 @@ func MakeAssertion(t *testing.T, authnRequest *saml.IdpAuthnRequest, userSession
 	assert.NilError(t, err)
 }
 
-func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, saml.IdpAuthnRequest, string) {
+func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, *IdentityProviderTest, saml.IdpAuthnRequest, string) {
 	// Set timeNow for SAML Requests and Responses
 	setSAMLTimeNow("Wed Jan 1 01:57:09.123456789 UTC 2014")
 
@@ -196,12 +196,10 @@ func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, saml.IdpAuthnRequest
 	// so that it can send the SAML Response back to the SP via the SP ACS
 	authnRequest, authnRequestID := NewTestIdpAuthnRequest(t, &testIDP.IDP, acsURL, testMiddleware.Middleware.ServiceProvider.EntityID)
 
-	return testMiddleware, authnRequest, authnRequestID
+	return testMiddleware, testIDP, authnRequest, authnRequestID
 }
 
-func PrepareTestSAMLResponse(t *testing.T) (*MiddlewareTest, saml.IdpAuthnRequest, string) {
-	testMiddleware, authnRequest, authnRequestID := prepareTestEnvironment(t)
-
+func PrepareTestSAMLResponse(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string) saml.IdpAuthnRequest {
 	// User session
 	userSession := &saml.Session{
 		ID:       "f00df00df00d",
@@ -214,7 +212,7 @@ func PrepareTestSAMLResponse(t *testing.T) (*MiddlewareTest, saml.IdpAuthnReques
 	// Make SAML Response
 	authnRequest.MakeResponse()
 
-	return testMiddleware, authnRequest, authnRequestID
+	return authnRequest
 }
 
 func PrepareTestSAMLResponseHTTPRequest(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string, responseStr string) *http.Request {
