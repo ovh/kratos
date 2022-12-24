@@ -30,7 +30,6 @@ import (
 	"github.com/ory/kratos/x"
 	"github.com/ory/x/decoderx"
 	"github.com/ory/x/fetcher"
-	"github.com/ory/x/jsonx"
 )
 
 var ErrNoSession = errors.New("saml: session not present")
@@ -333,16 +332,9 @@ func MustParseCertificate(pemStr []byte) (*x509.Certificate, error) {
 
 // Create a SAMLProvider object from the config file
 func CreateSAMLProviderConfig(config config.Config, ctx context.Context, pid string) (*Configuration, error) {
-	var c ConfigurationCollection
-	conf := config.SelfServiceStrategy(ctx, "saml").Config
-	if err := jsonx.
-		NewStrictDecoder(bytes.NewBuffer(conf)).
-		Decode(&c); err != nil {
-		return nil, ErrInvalidSAMLConfiguration.WithReasonf("Unable to decode config %v", string(conf)).WithTrace(err)
-	}
-
-	if len(c.SAMLProviders) == 0 {
-		return nil, ErrInvalidSAMLConfiguration.WithReason("Please indicate a SAML Identity Provider in your configuration file")
+	c, err := GetProvidersConfigCollection(ctx, &config)
+	if err != nil {
+		return nil, err
 	}
 
 	providerConfig, err := c.ProviderConfig(pid)

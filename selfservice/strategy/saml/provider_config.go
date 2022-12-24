@@ -1,7 +1,11 @@
 package saml
 
 import (
+	"bytes"
+	"context"
 	"github.com/ory/herodot"
+	"github.com/ory/kratos/driver/config"
+	"github.com/ory/x/jsonx"
 	"github.com/pkg/errors"
 )
 
@@ -63,5 +67,18 @@ func (c ConfigurationCollection) ProviderConfig(id string) (*Configuration, erro
 			return &p, nil
 		}
 	}
-	return nil, errors.WithStack(herodot.ErrNotFound.WithReasonf(`SAML Provider "%s" is unknown or has not been configured`, id))
+	return nil, errors.WithStack(NewErrProviderIDMissingError())
+}
+
+func GetProvidersConfigCollection(ctx context.Context, cfg *config.Config) (*ConfigurationCollection, error) {
+	var c ConfigurationCollection
+	conf := cfg.SelfServiceStrategy(ctx, "saml").Config
+	if err := jsonx.NewStrictDecoder(bytes.NewBuffer(conf)).Decode(&c); err != nil {
+		return nil, ErrInvalidSAMLConfiguration.WithReasonf("Unable to decode config %v", string(conf)).WithTrace(err)
+	}
+
+	if len(c.SAMLProviders) == 0 {
+		return nil, ErrInvalidSAMLConfiguration.WithReason("Please indicate a SAML Identity Provider in your configuration file")
+	}
+	return &c, nil
 }

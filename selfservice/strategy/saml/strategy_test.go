@@ -55,6 +55,11 @@ func TestStrategy(t *testing.T) {
 	routerA := x.NewRouterAdmin()
 	ts, _ := testhelpers.NewKratosServerWithRouters(t, reg, routerP, routerA)
 
+	errTS := testhelpers.NewErrorTestServer(t, reg)
+	uiTS := testhelpers.NewLoginUIFlowEchoServer(t, reg)
+	conf.MustSet(ctx, config.ViperKeySelfServiceErrorUI, errTS.URL+"/error-ts")
+	conf.MustSet(ctx, config.ViperKeySelfServiceLoginUI, uiTS.URL+"/login-ts")
+
 	providerId := "idp1"
 	urlAcs := ts.URL + saml.RouteBaseAcs + "/" + providerId
 	remoteIDP := newIDP(t, ts.URL+saml.RouteBaseMetadata+"/"+providerId, urlAcs)
@@ -166,6 +171,27 @@ func TestStrategy(t *testing.T) {
 
 		return result
 	}
+
+	t.Run("case=should fail because provider does not exist", func(t *testing.T) {
+		t.Run("case=browser", func(t *testing.T) {
+			f := newLoginFlow(t, returnTS.URL, "", time.Minute)
+			action := afv(t, f.ID, providerId)
+
+			client := NewTestClient(t, nil)
+
+			//Post to kratos to initiate SAML flow
+			resp, body := makeRequestWithClient(t, action, url.Values{
+				"method":       []string{"saml"},
+				"samlProvider": []string{"does-not-exist"},
+			}, client, 200)
+			assert.Contains(t, resp.Request.URL.String(), uiTS.URL, "%s", body)
+
+			flowWithError, err := reg.LoginFlowPersister().GetLoginFlow(context.Background(), f.ID)
+			assert.NoError(t, err)
+
+			assert.Contains(t, flowWithError.UI.Nodes.Find("samlProvider").Messages[0].Text, "is unknown")
+		})
+	})
 
 	t.Run("case=login without registered account", func(t *testing.T) {
 		t.Run("case=browser", func(t *testing.T) {

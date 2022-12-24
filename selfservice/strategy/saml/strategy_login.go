@@ -99,6 +99,15 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 		return nil, s.handleError(w, r, f, pid, nil, err)
 	}
 
+	providersConfigCollection, err := GetProvidersConfigCollection(r.Context(), s.d.Config())
+	if err != nil {
+		return nil, err
+	}
+	_, err = providersConfigCollection.ProviderConfig(pid)
+	if err != nil {
+		return nil, err
+	}
+
 	if s.alreadyAuthenticated(w, r, req) {
 		return
 	}
