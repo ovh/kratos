@@ -128,7 +128,7 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	conf.MustSet(context.Background(), config.HookStrategyKey(config.ViperKeySelfServiceRegistrationAfter,
 		identity.CredentialsTypeSAML.String()), []config.SelfServiceHook{{Name: "session"}})
 
-	t.Logf("Kratos Public URL: %s", ts.URL)
+	// t.Logf("Kratos Public URL: %s", ts.URL)
 
 	// Instantiates the MiddleWare
 	_, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
