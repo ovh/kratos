@@ -281,6 +281,8 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 
 	// We get the possible SAML request IDs
 	possibleRequestIDs := GetPossibleRequestIDs(r, *m)
+
+	// We parse the SAML Response to get the SAML Assertion
 	assertion, err := m.ServiceProvider.ParseResponse(r, possibleRequestIDs)
 	if err != nil {
 		s.forwardError(w, r, err)

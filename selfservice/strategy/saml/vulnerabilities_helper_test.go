@@ -15,12 +15,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/logger"
 	"github.com/crewjam/saml/samlsp"
+	"github.com/crewjam/saml/xmlenc"
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v4"
 	dsig "github.com/russellhaering/goxmldsig"
+	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 	"gotest.tools/golden"
 )
@@ -234,4 +237,32 @@ func PrepareTestSAMLResponseHTTPRequest(t *testing.T, testMiddleware *Middleware
 		"saml_"+trackedRequestIndex+"="+trackedRequestToken)
 
 	return req
+}
+
+func GetAndDecryptAssertionEl(t *testing.T, testMiddleware *MiddlewareTest, responseDoc *etree.Document) *etree.Element {
+	// Get the Encrypted Assertion Data
+	spKey := testMiddleware.Middleware.ServiceProvider.Key
+	encryptedAssertionDataEl := responseDoc.Element.FindElement("//EncryptedAssertion/EncryptedData")
+
+	// Decrypt the Encrypted Assertion
+	plaintextAssertion, err := xmlenc.Decrypt(spKey, encryptedAssertionDataEl)
+	require.NoError(t, err)
+	stringAssertion := string(plaintextAssertion)
+	newAssertion := etree.NewDocument()
+	newAssertion.ReadFromString(stringAssertion)
+
+	return newAssertion.Root()
+}
+
+// Replace the Encrypted Assertion by the modified Assertion
+func ReplaceResponseAssertion(t *testing.T, responseEl *etree.Element, newAssertionEl *etree.Element) {
+	encryptedAssertionEl := responseEl.FindElement("//EncryptedAssertion")
+	encryptedAssertionEl.Parent().RemoveChild(encryptedAssertionEl)
+	responseEl.AddChild(newAssertionEl)
+}
+
+// Remove the SAML Response signature
+func RemoveResponseSignature(t *testing.T, responseDoc *etree.Document) {
+	responseSignatureEl := responseDoc.FindElement("//Signature")
+	responseSignatureEl.Parent().RemoveChild(responseSignatureEl)
 }
