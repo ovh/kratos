@@ -153,9 +153,9 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	}
 
 	// Key pair to encrypt and sign SAML requests
-	keyPair, err := tls.LoadX509KeyPair(strings.Replace(providerConfig.PublicCertPath, "file://", "", 1), strings.Replace(providerConfig.PrivateKeyPath, "file://", "", 1))
+	keyPair, err := tls.LoadX509KeyPair(strings.Replace(providerConfig.PublicCertPath, "file://", "", 1), strings.Replace(providerConfig.PrivateKeyPath, "file://", "", 1)) // TODO : Fetcher
 	if err != nil {
-		return herodot.ErrNotFound.WithTrace(err)
+		return herodot.ErrNotFound.WithTrace(err) // TODO : Replace with File not found error
 	}
 	keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
 	if err != nil {
@@ -313,7 +313,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 // Return the singleton MiddleWare
 func GetMiddleware(pid string) (*samlsp.Middleware, error) {
 	if samlMiddlewares[pid] == nil {
-		return nil, errors.Errorf("An error occurred while retrieving the middeware, it is null")
+		return nil, errors.Errorf("An error occurred while retrieving the middeware, it is null") // TODO : Improve error message
 	}
 	return samlMiddlewares[pid], nil
 }
@@ -321,7 +321,7 @@ func GetMiddleware(pid string) (*samlsp.Middleware, error) {
 func MustParseCertificate(pemStr []byte) (*x509.Certificate, error) {
 	b, _ := pem.Decode(pemStr)
 	if b == nil {
-		return nil, errors.Errorf("Cannot find the next PEM formatted block")
+		return nil, errors.Errorf("Cannot find the next PEM formatted block while parsing the certificate")
 	}
 	cert, err := x509.ParseCertificate(b.Bytes)
 	if err != nil {
