@@ -20,6 +20,8 @@ import (
 	"github.com/crewjam/saml/logger"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/crewjam/saml/xmlenc"
+	samlhandler "github.com/ory/kratos/selfservice/strategy/saml"
+
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v4"
 	dsig "github.com/russellhaering/goxmldsig"
@@ -90,12 +92,14 @@ func (test *MiddlewareTest) makeTrackedRequest(id string) (string, string) {
 	return token, index
 }
 
-func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *httptest.Server) {
+func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *samlhandler.Strategy, *httptest.Server) {
 	middlewareTest := MiddlewareTest{}
 
-	middleWare, _, ts, err := InitTestMiddlewareWithMetadata(t, "file://testdata/idp_metadata.xml")
+	samlhandler.DestroyMiddlewareIfExists("samlProvider")
+
+	middleWare, strategy, ts, err := InitTestMiddlewareWithMetadata(t, "file://testdata/idp_metadata.xml")
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	middlewareTest.Middleware = middleWare
@@ -109,7 +113,7 @@ func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *httptest.Server) {
 		panic(err)
 	}
 
-	return &middlewareTest, ts
+	return &middlewareTest, strategy, ts
 }
 
 func NewIdentifyProviderTest(t *testing.T, serviceProvider saml.ServiceProvider, tsURL string) *IdentityProviderTest {
@@ -182,12 +186,12 @@ func MakeAssertion(t *testing.T, authnRequest *saml.IdpAuthnRequest, userSession
 	assert.NilError(t, err)
 }
 
-func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, *IdentityProviderTest, saml.IdpAuthnRequest, string) {
+func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, *samlhandler.Strategy, *IdentityProviderTest, saml.IdpAuthnRequest, string) {
 	// Set timeNow for SAML Requests and Responses
 	setSAMLTimeNow("Wed Jan 1 01:57:09.123456789 UTC 2014")
 
 	// Create a SAML SP
-	testMiddleware, ts := NewMiddlewareTest(t)
+	testMiddleware, strategy, ts := NewMiddlewareTest(t)
 
 	// Create a SAML IdP
 	testIDP := NewIdentifyProviderTest(t, testMiddleware.Middleware.ServiceProvider, ts.URL)
@@ -199,7 +203,7 @@ func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, *IdentityProviderTes
 	// so that it can send the SAML Response back to the SP via the SP ACS
 	authnRequest, authnRequestID := NewTestIdpAuthnRequest(t, &testIDP.IDP, acsURL, testMiddleware.Middleware.ServiceProvider.EntityID)
 
-	return testMiddleware, testIDP, authnRequest, authnRequestID
+	return testMiddleware, strategy, testIDP, authnRequest, authnRequestID
 }
 
 func PrepareTestSAMLResponse(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string) saml.IdpAuthnRequest {
@@ -209,6 +213,10 @@ func PrepareTestSAMLResponse(t *testing.T, testMiddleware *MiddlewareTest, authn
 		UserName: "alice",
 	}
 
+	return PrepareTestSAMLResponseWithSession(t, testMiddleware, authnRequest, authnRequestID, userSession)
+}
+
+func PrepareTestSAMLResponseWithSession(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string, userSession *saml.Session) saml.IdpAuthnRequest {
 	// Make SAML Assertion
 	MakeAssertion(t, &authnRequest, userSession)
 
@@ -265,4 +273,14 @@ func ReplaceResponseAssertion(t *testing.T, responseEl *etree.Element, newAssert
 func RemoveResponseSignature(t *testing.T, responseDoc *etree.Document) {
 	responseSignatureEl := responseDoc.FindElement("//Signature")
 	responseSignatureEl.Parent().RemoveChild(responseSignatureEl)
+}
+
+func Delete(j []string, selector string) []string {
+	var r []string
+	for _, str := range j {
+		if str != selector {
+			r = append(r, str)
+		}
+	}
+	return r
 }
