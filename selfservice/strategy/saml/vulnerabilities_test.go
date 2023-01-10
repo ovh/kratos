@@ -1,11 +1,21 @@
 package saml_test
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/beevik/etree"
+	"github.com/crewjam/saml"
+	"github.com/instana/testify/require"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 func TestMiddlewareCanParseResponse(t *testing.T) {
-	/*t.Run("case=happy path", func(t *testing.T) {
+	t.Run("case=happy path", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
@@ -118,9 +128,9 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// The SAML Response has been modified, the signature is invalid, so the HTTP Response code is 403 (Forbidden status)
 		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
-	})*/
+	})
 
-	/*t.Run("case=add saml assertion attribute", func(t *testing.T) {
+	t.Run("case=add saml assertion attribute", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
@@ -133,7 +143,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		doc.SetRoot(responseEl)
 
 		// Remove the whole Signature element
-		RemoveResponseSignature(t, doc)
+		RemoveResponseSignature(doc)
 
 		// Get and Decrypt SAML Assertion
 		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
@@ -171,7 +181,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		doc.SetRoot(responseEl)
 
 		// Remove the whole Signature element
-		RemoveResponseSignature(t, doc)
+		RemoveResponseSignature(doc)
 
 		// Get and Decrypt SAML Assertion
 		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
@@ -194,9 +204,9 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
 		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
-	})*/
+	})
 
-	/*t.Run("case=remove saml response signature value", func(t *testing.T) {
+	t.Run("case=remove saml response signature value", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
@@ -271,7 +281,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		doc.SetRoot(responseEl)
 
 		// Remove the whole Signature element
-		RemoveResponseSignature(t, doc)
+		RemoveResponseSignature(doc)
 
 		// Get and Decrypt SAML Assertion
 		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
@@ -310,7 +320,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		doc.SetRoot(responseEl)
 
 		// Remove the whole Signature element
-		RemoveResponseSignature(t, doc)
+		RemoveResponseSignature(doc)
 
 		// Get and Decrypt SAML Assertion
 		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
@@ -350,7 +360,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		doc.SetRoot(responseEl)
 
 		// Remove the whole Signature element
-		RemoveResponseSignature(t, doc)
+		RemoveResponseSignature(doc)
 
 		// Get and Decrypt SAML Assertion
 		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
@@ -374,47 +384,528 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
 		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
-	})*/
-	/*
-		t.Run("case=add xml comments in saml attributes", func(t *testing.T) {
-			// Create the SP, the IdP and the AnthnRequest
-			testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+	})
 
-			groups := []string{"admin@test.ovh", "not-adminc@test.ovh", "regular@test.ovh", "manager@test.ovh"}
-			evilGroups := []string{"<!--comment-->admin@test.ovh", "not-<!--comment-->adminc@test.ovh", "regular@test.ovh<!--comment-->", "<!--comment-->manager<!--comment-->@test.ovh<!--comment-->"}
+	t.Run("case=add xml comments in saml attributes", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
-			// User session
-			userSession := &saml.Session{
-				ID:       "f00df00df00d",
-				UserName: "alice",
-				Groups:   groups,
+		groups := []string{"admin@test.ovh", "not-adminc@test.ovh", "regular@test.ovh", "manager@test.ovh"}
+		evilGroups := []string{"<!--comment-->admin@test.ovh", "not-<!--comment-->adminc@test.ovh", "regular@test.ovh<!--comment-->", "<!--comment-->manager<!--comment-->@test.ovh<!--comment-->"}
+
+		// User session
+		userSession := &saml.Session{
+			ID:       "f00df00df00d",
+			UserName: "alice",
+			Groups:   groups,
+		}
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponseWithSession(t, testMiddleware, authnRequest, authnRequestID, userSession)
+
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
+		doc := etree.NewDocument()
+		doc.SetRoot(responseEl)
+
+		// Remove the whole Signature element
+		RemoveResponseSignature(doc)
+
+		// Get and Decrypt SAML Assertion
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
+
+		// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+		ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
+
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		assert.NilError(t, err)
+
+		// Inject XML Comment
+		// responseStr = strings.Replace(responseStr, "not-admin@test.ovh", "not-<!--comment-->admin@test.ovh", 1)
+
+		fmt.Println(responseStr)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
+		assert.Check(t, is.Equal(http.StatusFound, resp.Code))
+
+		// We parse the SAML Response to get the SAML Assertion
+		assertion, err := testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
+		require.NoError(t, err)
+
+		// We get the user's attributes from the SAML Response (assertion)
+		attributes, err := strategy.GetAttributesFromAssertion(assertion)
+		require.NoError(t, err)
+
+		assertionGroups := attributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.1"]
+		for i := 0; i < len(assertionGroups); i++ {
+			splittedEvilGroup := Delete(strings.Split(evilGroups[i], "<!--comment-->"), "")
+			if len(splittedEvilGroup) == 1 {
+				continue
 			}
+			for j := 0; j < len(splittedEvilGroup); j++ {
+				assert.Assert(t, assertionGroups[i] != splittedEvilGroup[j])
+			}
+		}
+
+		fmt.Println(attributes)
+	})
+	// More information about the 9 next tests about XSW attacks:
+	// https://epi052.gitlab.io/notes-to-self/blog/2019-03-13-how-to-test-saml-a-methodology-part-two
+
+	// XSW #1 manipulates SAML Responses.
+	// It does this by making a copy of the SAML Response and Assertion,
+	// then inserting the original Signature into the XML as a child element of the copied Response.
+	// The assumption being that the XML parser finds and uses the copied Response at the top of
+	// the document after signature validation instead of the original signed Response.
+	t.Run("case=xsw1 response wrap 1", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		// Remove the whole Signature element of the copied Response Element
+		RemoveResponseSignature(originalResponseDoc)
+
+		// Get the original Response Signature element
+		evilResponseDoc.FindElement("//Signature").AddChild(originalResponseEl)
+
+		// Modify the ID attribute of the original Response Element
+		evilResponseEl.RemoveAttr("ID")
+		evilResponseEl.CreateAttr("ID", "id-evil")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+	})
+
+	// Similar to XSW #1, XSW #2 manipulates SAML Responses.
+	// The key difference between #1 and #2 is that the type of Signature used is a detached signature where XSW #1 used an enveloping signature.
+	// The location of the malicious Response remains the same.
+	t.Run("case=xsw2 response wrap 2", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		// Remove the whole Signature element of the copied Response Element
+		RemoveResponseSignature(originalResponseDoc)
+
+		// We put the orignal response and its signature on the same level, just under the evil reponse
+		evilResponseDoc.FindElement("//Response").AddChild(originalResponseEl)
+		evilResponseDoc.FindElement("//Response").AddChild(evilResponseDoc.FindElement("//Signature"))
+
+		// Modify the ID attribute of the original Response Element
+		evilResponseEl.RemoveAttr("ID")
+		evilResponseEl.CreateAttr("ID", "id-evil")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+	})
+
+	// XSW #3 is the first example of an XSW that wraps the Assertion element.
+	// It inserts the copied Assertion as the first child of the root Response element.
+	// The original Assertion is a sibling of the copied Assertion.
+	t.Run("case=xsw3 assertion wrap 1", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Get and Decrypt SAML Assertion
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
+
+		// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+		ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		RemoveResponseSignature(evilResponseDoc)
+
+		// We have to delete the signature of the evil assertion
+		RemoveAssertionSignature(evilResponseDoc)
+		evilResponseDoc.FindElement("//Assertion").RemoveAttr("ID")
+		evilResponseDoc.FindElement("//Assertion").CreateAttr("ID", "id-evil")
+
+		evilResponseDoc.FindElement("//Response").AddChild(originalResponseDoc.FindElement("//Assertion"))
+
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		assertion, err := testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
+		require.NoError(t, err)
+
+		// We get the user's attributes from the SAML Response (assertion)
+		attributes, err := strategy.GetAttributesFromAssertion(assertion)
+		fmt.Println(attributes)
+		require.NoError(t, err)
+
+		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
+		assert.Check(t, (resp.Code == http.StatusFound && attributes["urn:oid:0.9.2342.19200300.100.1.1"][0] == "alice") || resp.Code == http.StatusForbidden)
+	})
+
+	// XSW #4 is similar to #3, except in this case the original Assertion becomes a child of the copied Assertion.
+	t.Run("case=xsw4 assertion wrap 2", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Get and Decrypt SAML Assertion
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
+
+		// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+		ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		RemoveResponseSignature(evilResponseDoc)
+
+		// We have to delete the signature of the evil assertion
+		RemoveAssertionSignature(evilResponseDoc)
+		evilResponseDoc.FindElement("//Assertion").RemoveAttr("ID")
+		evilResponseDoc.FindElement("//Assertion").CreateAttr("ID", "id-evil")
+
+		evilResponseDoc.FindElement("//Assertion").AddChild(originalResponseDoc.FindElement("//Assertion"))
+
+		// Change the username
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
+		require.Error(t, err)
+
+		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
+		assert.Check(t, resp.Code == http.StatusForbidden)
+	})
+
+	// XSW #5 is the first instance of Assertion wrapping we see where the Signature and the original Assertion aren’t in one of the three standard configurations (enveloped/enveloping/detached).
+	// In this case, the copied Assertion envelopes the Signature.
+	t.Run("case=xsw5 assertion wrap 3", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Get and Decrypt SAML Assertion
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
+
+		// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+		ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		RemoveResponseSignature(evilResponseDoc)
+
+		evilResponseDoc.FindElement("//Assertion").RemoveAttr("ID")
+		evilResponseDoc.FindElement("//Assertion").CreateAttr("ID", "id-evil")
+
+		RemoveAssertionSignature(originalResponseDoc)
+		evilResponseDoc.FindElement("//Response").AddChild(originalResponseDoc.FindElement("//Assertion"))
+
+		// Change the username
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
+		require.Error(t, err)
+
+		assert.Check(t, (resp.Code == http.StatusForbidden))
+	})
+
+	// XSW #6 inserts its copied Assertion into the same location as #’s 4 and 5.
+	// The interesting piece here is that the copied Assertion envelopes the Signature, which in turn envelopes the original Assertion.
+	t.Run("case=xsw6 assertion wrap 4", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Get and Decrypt SAML Assertion
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
+
+		// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+		ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		RemoveResponseSignature(evilResponseDoc)
+
+		evilResponseDoc.FindElement("//Assertion").RemoveAttr("ID")
+		evilResponseDoc.FindElement("//Assertion").CreateAttr("ID", "id-evil")
+
+		RemoveAssertionSignature(originalResponseDoc)
+		evilResponseDoc.FindElement("//Assertion").FindElement("//Signature").AddChild(originalResponseDoc.FindElement("//Assertion"))
+
+		// Change the username
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
+		require.Error(t, err)
+
+		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
+		assert.Check(t, (resp.Code == http.StatusForbidden))
+	})
+
+	// XSW #7 inserts an Extensions element and adds the copied Assertion as a child. Extensions is a valid XML element with a less restrictive schema definition.
+	t.Run("case=xsw7 assertion wrap 5", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Get and Decrypt SAML Assertion
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
+
+		// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+		ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		RemoveResponseSignature(evilResponseDoc)
+
+		// We have to delete the signature of the evil assertion
+		RemoveAssertionSignature(evilResponseDoc)
+
+		evilResponseDoc.FindElement("//Response").AddChild(etree.NewElement("Extension"))
+		evilResponseDoc.FindElement("//Response").FindElement("//Extension").AddChild(evilResponseDoc.FindElement("//Assertion"))
+		evilResponseDoc.FindElement("//Response").AddChild(originalResponseDoc.FindElement("//Assertion"))
+
+		// Change the username
+		evilResponseDoc.FindElement("//Response/Extension/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
+		require.Error(t, err)
+
+		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
+		assert.Check(t, resp.Code == http.StatusForbidden)
+	})
+
+	// XSW #8 uses another less restrictive XML element to perform a variation of the attack pattern used in XSW #7.
+	// This time around the original Assertion is the child of the less restrictive element instead of the copied Assertion.
+	t.Run("case=xsw8 assertion wrap 6", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		evilResponseEl := authnRequest.ResponseEl
+		evilResponseDoc := etree.NewDocument()
+		evilResponseDoc.SetRoot(evilResponseEl)
+
+		// Get and Decrypt SAML Assertion
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
+
+		// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+		ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
+
+		// Copy the Response Element
+		// This copy will not be changed and contain the original Response content
+		originalResponseEl := evilResponseEl.Copy()
+		originalResponseDoc := etree.NewDocument()
+		originalResponseDoc.SetRoot(originalResponseEl)
+
+		RemoveResponseSignature(evilResponseDoc)
+
+		RemoveAssertionSignature(originalResponseDoc)
+		evilResponseDoc.FindElement("//Response/Assertion/Signature").AddChild(etree.NewElement("Object"))
+		evilResponseDoc.FindElement("//Assertion/Signature/Object").AddChild(originalResponseDoc.FindElement("//Assertion"))
+
+		// Change the username
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+
+		// Get Reponse string
+		responseStr, err := evilResponseDoc.WriteToString()
+		assert.NilError(t, err)
+
+		fmt.Println(responseStr)
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
+		require.Error(t, err)
+
+		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
+		assert.Check(t, (resp.Code == http.StatusForbidden))
+	})
+
+	// If the response was meant for a different Service Provider, the current Service Provider should notice it and reject the authentication
+	/*
+		t.Run("case=token recipient confusion", func(t *testing.T) {
+
+			// We have to create two service provider
+			testMiddleware1, testMiddleware2, _, _, authnRequest, authnRequestID := prepareTestEnvironmentTwoServiceProvider(t)
 
 			// Generate the SAML Assertion and the SAML Response
-			authnRequest = PrepareTestSAMLResponseWithSession(t, testMiddleware, authnRequest, authnRequestID, userSession)
+			authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
 
 			// Get Response Element
 			responseEl := authnRequest.ResponseEl
 			doc := etree.NewDocument()
 			doc.SetRoot(responseEl)
 
-			// Remove the whole Signature element
-			RemoveResponseSignature(t, doc)
-
-			// Get and Decrypt SAML Assertion
-			decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
-
-			// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
-			ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
-
 			// Get Reponse string
 			responseStr, err := doc.WriteToString()
 			assert.NilError(t, err)
-
-			// Inject XML Comment
-			// responseStr = strings.Replace(responseStr, "not-admin@test.ovh", "not-<!--comment-->admin@test.ovh", 1)
-
-			fmt.Println(responseStr)
 
 			req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
 
@@ -422,29 +913,9 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 			resp := httptest.NewRecorder()
 			testMiddleware.Middleware.ServeHTTP(resp, req)
 
-			// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
+			// This is the Happy Path, the HTTP response code should be 302 (Found status)
 			assert.Check(t, is.Equal(http.StatusFound, resp.Code))
 
-			// We parse the SAML Response to get the SAML Assertion
-			assertion, err := testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-			require.NoError(t, err)
-
-			// We get the user's attributes from the SAML Response (assertion)
-			attributes, err := strategy.GetAttributesFromAssertion(assertion)
-			require.NoError(t, err)
-
-			assertionGroups := attributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.1"]
-			for i := 0; i < len(assertionGroups); i++ {
-				splittedEvilGroup := Delete(strings.Split(evilGroups[i], "<!--comment-->"), "")
-				if len(splittedEvilGroup) == 1 {
-					continue
-				}
-				for j := 0; j < len(splittedEvilGroup); j++ {
-					assert.Assert(t, assertionGroups[i] != splittedEvilGroup[j])
-				}
-			}
-
-			fmt.Println(attributes)
-		})*/
-
+		})
+	*/
 }

@@ -206,6 +206,26 @@ func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, *samlhandler.Strateg
 	return testMiddleware, strategy, testIDP, authnRequest, authnRequestID
 }
 
+func prepareTestEnvironmentTwoServiceProvider(t *testing.T) (*MiddlewareTest, *MiddlewareTest, *samlhandler.Strategy, *IdentityProviderTest, saml.IdpAuthnRequest, string) {
+	// Set timeNow for SAML Requests and Responses
+	setSAMLTimeNow("Wed Jan 1 01:57:09.123456789 UTC 2014")
+
+	// Create a SAML SP
+	testMiddleware, strategy, ts := NewMiddlewareTest(t)
+
+	// Create a SAML IdP
+	testIDP := NewIdentifyProviderTest(t, testMiddleware.Middleware.ServiceProvider, ts.URL)
+
+	// SP ACS URL
+	acsURL := ts.URL + "/self-service/methods/saml/acs/samlProvider"
+
+	// Create a SAML AuthnRequest as it would be taken into account by the IdP
+	// so that it can send the SAML Response back to the SP via the SP ACS
+	authnRequest, authnRequestID := NewTestIdpAuthnRequest(t, &testIDP.IDP, acsURL, testMiddleware.Middleware.ServiceProvider.EntityID)
+
+	return testMiddleware, nil, strategy, testIDP, authnRequest, authnRequestID
+}
+
 func PrepareTestSAMLResponse(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string) saml.IdpAuthnRequest {
 	// User session
 	userSession := &saml.Session{
@@ -270,9 +290,14 @@ func ReplaceResponseAssertion(t *testing.T, responseEl *etree.Element, newAssert
 }
 
 // Remove the SAML Response signature
-func RemoveResponseSignature(t *testing.T, responseDoc *etree.Document) {
+func RemoveResponseSignature(responseDoc *etree.Document) {
 	responseSignatureEl := responseDoc.FindElement("//Signature")
 	responseSignatureEl.Parent().RemoveChild(responseSignatureEl)
+}
+
+func RemoveAssertionSignature(responseDoc *etree.Document) {
+	assertionSignatureEl := responseDoc.FindElement("//Assertion/Signature")
+	assertionSignatureEl.Parent().RemoveChild(assertionSignatureEl)
 }
 
 func Delete(j []string, selector string) []string {
