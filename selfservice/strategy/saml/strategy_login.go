@@ -58,11 +58,14 @@ type SubmitSelfServiceLoginFlowWithSAMLMethodBody struct {
 // Login and give a session to the user
 func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login.Flow, provider Provider, c *identity.Credentials, i *identity.Identity, claims *Claims) (*registration.Flow, error) {
 
-	s.updateIdentityTraits(i, provider, claims)
+	err := s.updateIdentityTraits(i, provider, claims)
+	if err != nil {
+		return nil, s.handleError(w, r, a, provider.Config().ID, i.Traits, err)
+	}
 
 	var o identity.CredentialsSAML
 	if err := json.NewDecoder(bytes.NewBuffer(c.Config)).Decode(&o); err != nil {
-		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The password credentials could not be decoded properly").WithDebug(err.Error())))
+		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The SAML credentials could not be decoded properly").WithDebug(err.Error())))
 	}
 
 	sess := session.NewInactiveSession()                                  // Creation of an inactive session

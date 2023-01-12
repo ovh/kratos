@@ -176,7 +176,9 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 
 		metadata, err := ioutil.ReadAll(metadataBuffer)
 		if err != nil {
-			return herodot.ErrInternalServerError.WithTrace(err)
+			return errors.WithStack(herodot.ErrInternalServerError.
+				WithReason("Error reading IdP metadata").
+				WithDebug(err.Error()).WithWrap(err))
 		}
 
 		idpMetadata, err = samlsp.ParseMetadata(metadata)
@@ -212,7 +214,9 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 
 		certificate, err := ioutil.ReadAll(certificateBuffer)
 		if err != nil {
-			return herodot.ErrInternalServerError.WithTrace(err)
+			return errors.WithStack(herodot.ErrInternalServerError.
+				WithReason("Error reading certificate").
+				WithDebug(err.Error()).WithWrap(err))
 		}
 
 		// We parse it into a x509.Certificate object
@@ -263,7 +267,9 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 		},
 	})
 	if err != nil {
-		return herodot.ErrInternalServerError.WithTrace(err)
+		return errors.WithStack(herodot.ErrInternalServerError.
+			WithReason("Error creating middleware").
+			WithDebug(err.Error()).WithWrap(err))
 	}
 
 	// It's better to use SHA256 than SHA1

@@ -350,7 +350,10 @@ func (s *Strategy) Config(ctx context.Context) (*ConfigurationCollection, error)
 		NewStrictDecoder(bytes.NewBuffer(conf)).
 		Decode(&c); err != nil {
 		s.d.Logger().WithError(err).WithField("config", conf)
-		return nil, errors.WithStack(herodot.ErrInternalServerError.WithReasonf("Unable to decode SAML Identity Provider configuration: %s", err))
+		return nil, errors.WithStack(herodot.ErrInternalServerError.
+			WithReason("Unable to decode SAML Identity Provider configuration").
+			WithDebug(err.Error()).WithWrap(err))
+
 	}
 
 	return &c, nil
@@ -391,19 +394,24 @@ func (s *Strategy) handleError(w http.ResponseWriter, r *http.Request, f flow.Fl
 
 			traitNodes, err := container.NodesFromJSONSchema(r.Context(), node.SAMLGroup, ds.String(), "", nil)
 			if err != nil {
-				return herodot.ErrInternalServerError.WithTrace(err)
+				return errors.WithStack(herodot.ErrInternalServerError.
+					WithReason("Error reading traits nodes").
+					WithDebug(err.Error()).WithWrap(err))
 			}
 
 			rf.UI.Nodes = append(rf.UI.Nodes, traitNodes...)
 			rf.UI.UpdateNodeValuesFromJSON(traits, "traits", node.SAMLGroup)
 		}
 
-		return herodot.ErrInternalServerError.WithTrace(err)
+		return errors.WithStack(herodot.ErrInternalServerError.
+			WithDebug(err.Error()).WithWrap(err))
 	case *settings.Flow:
-		return ErrAPIFlowNotSupported.WithTrace(err)
+		return errors.WithStack(herodot.ErrInternalServerError.
+			WithDebug(err.Error()).WithWrap(err))
 	}
 
-	return herodot.ErrInternalServerError.WithTrace(err)
+	return errors.WithStack(herodot.ErrInternalServerError.
+		WithDebug(err.Error()).WithWrap(err))
 }
 
 func (s *Strategy) CountActiveCredentials(cc map[identity.CredentialsType]identity.Credentials) (count int, err error) {
