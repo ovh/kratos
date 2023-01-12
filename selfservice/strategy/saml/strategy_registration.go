@@ -9,7 +9,6 @@ import (
 	"github.com/google/go-jsonnet"
 	"github.com/pkg/errors"
 
-	"github.com/ory/kratos/driver/config"
 	"github.com/ory/kratos/identity"
 	"github.com/ory/x/decoderx"
 
@@ -44,7 +43,7 @@ func (s *Strategy) GetRegistrationIdentity(r *http.Request, ctx context.Context,
 	}
 
 	// Identity Creation
-	i := identity.NewIdentity(config.DefaultIdentityTraitsSchemaID)
+	i := identity.NewIdentity(s.d.Config().DefaultIdentityTraitsSchemaID(ctx))
 
 	vm := jsonnet.MakeVM()
 	vm.ExtCode("claims", jsonClaims.String())
