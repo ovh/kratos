@@ -403,15 +403,12 @@ func (s *Strategy) handleError(w http.ResponseWriter, r *http.Request, f flow.Fl
 			rf.UI.UpdateNodeValuesFromJSON(traits, "traits", node.SAMLGroup)
 		}
 
-		return errors.WithStack(herodot.ErrInternalServerError.
-			WithDebug(err.Error()).WithWrap(err))
+		return err
 	case *settings.Flow:
-		return errors.WithStack(herodot.ErrInternalServerError.
-			WithDebug(err.Error()).WithWrap(err))
+		return ErrAPIFlowNotSupported.WithTrace(err)
 	}
 
-	return errors.WithStack(herodot.ErrInternalServerError.
-		WithDebug(err.Error()).WithWrap(err))
+	return err
 }
 
 func (s *Strategy) CountActiveCredentials(cc map[identity.CredentialsType]identity.Credentials) (count int, err error) {
