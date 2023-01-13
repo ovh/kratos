@@ -80,7 +80,7 @@ func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httpr
 	pid := ps.ByName("provider")
 
 	if samlMiddlewares[pid] == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config, pid); err != nil {
+		if err := instantiateMiddleware(r.Context(), *config, h.d.SelfServiceErrorManager(), pid); err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -110,7 +110,7 @@ func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httpro
 	pid := ps.ByName("provider")
 
 	if samlMiddlewares[pid] == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config, pid); err != nil {
+		if err := instantiateMiddleware(r.Context(), *config, h.d.SelfServiceErrorManager(), pid); err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -145,7 +145,7 @@ func DestroyMiddlewareIfExists(pid string) {
 }
 
 // Instantiate the middleware SAML from the information in the configuration file
-func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Config, pid string) error {
+func instantiateMiddleware(ctx context.Context, config config.Config, errorManager *errorx.Manager, pid string) error {
 
 	providerConfig, err := CreateSAMLProviderConfig(config, ctx, pid)
 	if err != nil {
@@ -259,7 +259,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 			if !ok {
 				_, err := w.Write([]byte("No SessionID in current context"))
 				if err != nil {
-					h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+					errorManager.Forward(r.Context(), w, r, err)
 				}
 				return ""
 			}
@@ -317,9 +317,11 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 }
 
 // Return the singleton MiddleWare
-func GetMiddleware(pid string) (*samlsp.Middleware, error) {
+func GetMiddleware(ctx context.Context, config *config.Config, errorManager *errorx.Manager, pid string) (*samlsp.Middleware, error) {
 	if samlMiddlewares[pid] == nil {
-		return nil, errors.Errorf("An error occurred while retrieving the middeware, it is null")
+		if err := instantiateMiddleware(ctx, *config, errorManager, pid); err != nil {
+			return nil, err
+		}
 	}
 	return samlMiddlewares[pid], nil
 }

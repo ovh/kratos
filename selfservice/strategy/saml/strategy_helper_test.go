@@ -160,7 +160,7 @@ func mustParsePrivateKey(pemStr []byte) crypto.PrivateKey {
 	return k
 }
 
-func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
+func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*config.Config, *samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 
 	strategy := saml.NewStrategy(reg)
@@ -200,15 +200,15 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	// Instantiates the MiddleWare
 	_, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	require.NoError(t, err)
-	middleware, err := saml.GetMiddleware("samlProvider")
+	middleware, err := saml.GetMiddleware(context.Background(), conf, nil, "samlProvider")
 	require.NoError(t, err)
 	middleware.ServiceProvider.Key = mustParsePrivateKey(golden.Get(t, "key.pem")).(*rsa.PrivateKey)
 	middleware.ServiceProvider.Certificate = mustParseCertificate(golden.Get(t, "cert.pem"))
 
-	return middleware, strategy, ts, err
+	return conf, middleware, strategy, ts, err
 }
 
-func InitTestMiddlewareWithMetadata(t *testing.T, metadataURL string) (*samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
+func InitTestMiddlewareWithMetadata(t *testing.T, metadataURL string) (*config.Config, *samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
 	idpInformation := make(map[string]string)
 	idpInformation["idp_metadata_url"] = metadataURL
 
@@ -216,7 +216,7 @@ func InitTestMiddlewareWithMetadata(t *testing.T, metadataURL string) (*samlsp.M
 }
 
 func InitTestMiddlewareWithoutMetadata(t *testing.T, idpSsoUrl string, idpEntityId string,
-	idpCertifiatePath string, idpLogoutUrl string) (*samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
+	idpCertifiatePath string, idpLogoutUrl string) (*config.Config, *samlsp.Middleware, *saml.Strategy, *httptest.Server, error) {
 
 	idpInformation := make(map[string]string)
 	idpInformation["idp_sso_url"] = idpSsoUrl

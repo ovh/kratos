@@ -1,6 +1,7 @@
 package saml_test
 
 import (
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestInitMiddleWareWithMetadata(t *testing.T) {
 
 	saml.DestroyMiddlewareIfExists("samlProvider")
 
-	middleWare, _, _, err := InitTestMiddlewareWithMetadata(t,
+	_, middleWare, _, _, err := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
 	require.NoError(t, err)
@@ -35,7 +36,7 @@ func TestInitMiddleWareWithoutMetadata(t *testing.T) {
 
 	saml.DestroyMiddlewareIfExists("samlProvider")
 
-	middleWare, _, _, err := InitTestMiddlewareWithoutMetadata(t,
+	_, middleWare, _, _, err := InitTestMiddlewareWithoutMetadata(t,
 		"https://samltest.id/idp/profile/SAML2/Redirect/SSO",
 		"https://samltest.id/saml/idp",
 		"file://testdata/samlkratos.crt",
@@ -55,11 +56,11 @@ func TestGetMiddleware(t *testing.T) {
 
 	saml.DestroyMiddlewareIfExists("samlProvider")
 
-	_, _, _, err := InitTestMiddlewareWithMetadata(t,
+	conf, _, _, _, err := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 	require.NoError(t, err)
 
-	middleWare, err := saml.GetMiddleware("samlProvider")
+	middleWare, err := saml.GetMiddleware(context.Background(), conf, nil, "samlProvider")
 
 	require.NoError(t, err)
 	assert.Check(t, middleWare != nil)

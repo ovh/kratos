@@ -274,7 +274,7 @@ func (s *Strategy) handleCallback(w http.ResponseWriter, r *http.Request, ps htt
 		return
 	}
 
-	m, err := GetMiddleware(pid)
+	m, err := GetMiddleware(r.Context(), s.d.Config(), s.d.SelfServiceErrorManager(), pid)
 	if err != nil {
 		s.forwardError(w, r, err)
 		return
