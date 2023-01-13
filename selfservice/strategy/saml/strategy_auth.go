@@ -25,7 +25,10 @@ func (s *Strategy) processLoginOrRegister(w http.ResponseWriter, r *http.Request
 		// ErrNoRows is returned when a SQL SELECT statement returns no rows.
 		if errors.Is(err, sqlcon.ErrNoRows) {
 
-			// The user doesn't net existe yet so we register him
+			// The user doesn't exist yet so we register him
+			query := r.URL.Query()
+			query.Set("return_to", loginFlow.ReturnTo)
+			r.URL.RawQuery = query.Encode()
 			registerFlow, err := s.d.RegistrationHandler().NewRegistrationFlow(w, r, flow.TypeBrowser)
 			if err != nil {
 				if i == nil {
@@ -49,7 +52,7 @@ func (s *Strategy) processLoginOrRegister(w http.ResponseWriter, r *http.Request
 			return nil, err
 		}
 	} else {
-		// The user already exist in database so we log him
+		// The user already exist in database, so we log him
 		// loginFlow, err := s.d.LoginHandler().NewLoginFlow(w, r, flow.TypeBrowser)
 		if err != nil {
 			if i == nil {

@@ -3,6 +3,7 @@ package saml
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/ory/x/urlx"
 	"net/http"
 	"time"
 
@@ -45,7 +46,7 @@ type SubmitSelfServiceLoginFlowWithSAMLMethodBody struct {
 
 	// Method to use
 	//
-	// This field must be set to `oidc` when using the oidc method.
+	// This field must be set to `saml` when using the saml method.
 	//
 	// required: true
 	Method string `json:"method"`
@@ -57,11 +58,14 @@ type SubmitSelfServiceLoginFlowWithSAMLMethodBody struct {
 // Login and give a session to the user
 func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login.Flow, provider Provider, c *identity.Credentials, i *identity.Identity, claims *Claims) (*registration.Flow, error) {
 
-	s.updateIdentityTraits(i, provider, claims)
+	err := s.updateIdentityTraits(i, provider, claims)
+	if err != nil {
+		return nil, s.handleError(w, r, a, provider.Config().ID, i.Traits, err)
+	}
 
 	var o identity.CredentialsSAML
 	if err := json.NewDecoder(bytes.NewBuffer(c.Config)).Decode(&o); err != nil {
-		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The password credentials could not be decoded properly").WithDebug(err.Error())))
+		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("The SAML credentials could not be decoded properly").WithDebug(err.Error())))
 	}
 
 	sess := session.NewInactiveSession()                                  // Creation of an inactive session
@@ -98,6 +102,15 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 		return nil, s.handleError(w, r, f, pid, nil, err)
 	}
 
+	providersConfigCollection, err := GetProvidersConfigCollection(r.Context(), s.d.Config())
+	if err != nil {
+		return nil, err
+	}
+	_, err = providersConfigCollection.ProviderConfig(pid)
+	if err != nil {
+		return nil, err
+	}
+
 	if s.alreadyAuthenticated(w, r, req) {
 		return
 	}
@@ -119,9 +132,12 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 	}
 
 	if x.IsJSONRequest(r) {
-		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(RouteBaseAuth))
+		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()),
+			RouteBaseAuth+"/"+pid).String()))
 	} else {
-		http.Redirect(w, r, RouteBaseAuth+"/"+pid, http.StatusSeeOther)
+		http.Redirect(w, r,
+			urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()), RouteBaseAuth+"/"+pid).String(),
+			http.StatusSeeOther)
 	}
 
 	return nil, errors.WithStack(flow.ErrCompletedByStrategy)

@@ -30,7 +30,6 @@ import (
 	"github.com/ory/kratos/x"
 	"github.com/ory/x/decoderx"
 	"github.com/ory/x/fetcher"
-	"github.com/ory/x/jsonx"
 )
 
 var ErrNoSession = errors.New("saml: session not present")
@@ -81,7 +80,7 @@ func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httpr
 	pid := ps.ByName("provider")
 
 	if samlMiddlewares[pid] == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config, pid); err != nil {
+		if err := instantiateMiddleware(r.Context(), *config, h.d.SelfServiceErrorManager(), pid); err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -111,7 +110,7 @@ func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httpro
 	pid := ps.ByName("provider")
 
 	if samlMiddlewares[pid] == nil {
-		if err := h.instantiateMiddleware(r.Context(), *config, pid); err != nil {
+		if err := instantiateMiddleware(r.Context(), *config, h.d.SelfServiceErrorManager(), pid); err != nil {
 			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -122,6 +121,7 @@ func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httpro
 	cookie, err := r.Cookie(continuity.CookieName)
 	if err != nil {
 		h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+		return
 	}
 	body, _ := ioutil.ReadAll(r.Body)
 	r2 := r.Clone(context.WithValue(r.Context(), ory_kratos_continuity{}, cookie.Value))
@@ -145,7 +145,7 @@ func DestroyMiddlewareIfExists(pid string) {
 }
 
 // Instantiate the middleware SAML from the information in the configuration file
-func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Config, pid string) error {
+func instantiateMiddleware(ctx context.Context, config config.Config, errorManager *errorx.Manager, pid string) error {
 
 	providerConfig, err := CreateSAMLProviderConfig(config, ctx, pid)
 	if err != nil {
@@ -176,7 +176,9 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 
 		metadata, err := ioutil.ReadAll(metadataBuffer)
 		if err != nil {
-			return herodot.ErrInternalServerError.WithTrace(err)
+			return errors.WithStack(herodot.ErrInternalServerError.
+				WithReason("Error reading IdP metadata").
+				WithDebug(err.Error()).WithWrap(err))
 		}
 
 		idpMetadata, err = samlsp.ParseMetadata(metadata)
@@ -212,7 +214,9 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 
 		certificate, err := ioutil.ReadAll(certificateBuffer)
 		if err != nil {
-			return herodot.ErrInternalServerError.WithTrace(err)
+			return errors.WithStack(herodot.ErrInternalServerError.
+				WithReason("Error reading certificate").
+				WithDebug(err.Error()).WithWrap(err))
 		}
 
 		// We parse it into a x509.Certificate object
@@ -255,7 +259,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 			if !ok {
 				_, err := w.Write([]byte("No SessionID in current context"))
 				if err != nil {
-					h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+					errorManager.Forward(r.Context(), w, r, err)
 				}
 				return ""
 			}
@@ -263,7 +267,9 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 		},
 	})
 	if err != nil {
-		return herodot.ErrInternalServerError.WithTrace(err)
+		return errors.WithStack(herodot.ErrInternalServerError.
+			WithReason("Error creating middleware").
+			WithDebug(err.Error()).WithWrap(err))
 	}
 
 	// It's better to use SHA256 than SHA1
@@ -293,7 +299,7 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 	}
 
 	// Crewjam library use default route for ACS and metadata but we want to overwrite them
-	metadata, err := url.Parse(publicUrlString + RouteMetadata)
+	metadata, err := url.Parse(publicUrlString + RouteBaseMetadata + "/" + pid)
 	if err != nil {
 		return herodot.ErrNotFound.WithTrace(err)
 	}
@@ -311,9 +317,11 @@ func (h *Handler) instantiateMiddleware(ctx context.Context, config config.Confi
 }
 
 // Return the singleton MiddleWare
-func GetMiddleware(pid string) (*samlsp.Middleware, error) {
+func GetMiddleware(ctx context.Context, config *config.Config, errorManager *errorx.Manager, pid string) (*samlsp.Middleware, error) {
 	if samlMiddlewares[pid] == nil {
-		return nil, errors.Errorf("An error occurred while retrieving the middeware, it is null")
+		if err := instantiateMiddleware(ctx, *config, errorManager, pid); err != nil {
+			return nil, err
+		}
 	}
 	return samlMiddlewares[pid], nil
 }
@@ -332,16 +340,9 @@ func MustParseCertificate(pemStr []byte) (*x509.Certificate, error) {
 
 // Create a SAMLProvider object from the config file
 func CreateSAMLProviderConfig(config config.Config, ctx context.Context, pid string) (*Configuration, error) {
-	var c ConfigurationCollection
-	conf := config.SelfServiceStrategy(ctx, "saml").Config
-	if err := jsonx.
-		NewStrictDecoder(bytes.NewBuffer(conf)).
-		Decode(&c); err != nil {
-		return nil, ErrInvalidSAMLConfiguration.WithReasonf("Unable to decode config %v", string(conf)).WithTrace(err)
-	}
-
-	if len(c.SAMLProviders) == 0 {
-		return nil, ErrInvalidSAMLConfiguration.WithReason("Please indicate a SAML Identity Provider in your configuration file")
+	c, err := GetProvidersConfigCollection(ctx, &config)
+	if err != nil {
+		return nil, err
 	}
 
 	providerConfig, err := c.ProviderConfig(pid)

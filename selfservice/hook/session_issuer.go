@@ -5,7 +5,11 @@ package hook
 
 import (
 	"net/http"
+	"net/url"
+	"path"
 	"time"
+
+	"github.com/ory/kratos/driver/config"
 
 	"github.com/pkg/errors"
 
@@ -21,6 +25,7 @@ var (
 
 type (
 	sessionIssuerDependencies interface {
+		config.Provider
 		session.ManagementProvider
 		session.PersistenceProvider
 		x.WriterProvider
@@ -49,6 +54,28 @@ func (e *SessionIssuer) ExecutePostRegistrationPostPersistHook(w http.ResponseWr
 			Token:    s.Token,
 			Identity: s.Identity,
 		})
+		return errors.WithStack(registration.ErrHookAbortFlow)
+	}
+
+	isWebView, err := flow.IsWebViewFlow(r.Context(), e.r.Config(), a)
+	if err != nil {
+		return err
+	}
+	if isWebView {
+		response := &registration.APIFlowResponse{Session: s.Declassify(), Token: s.Token}
+
+		w.Header().Set("Content-Type", "application/json")
+		returnTo, err := url.Parse(a.ReturnTo)
+		if err != nil {
+			return err
+		}
+		returnTo.Path = path.Join(returnTo.Path, "success")
+		query := returnTo.Query()
+		query.Set("session_token", s.Token)
+		returnTo.RawQuery = query.Encode()
+		w.Header().Set("Location", returnTo.String())
+		e.r.Writer().WriteCode(w, r, http.StatusSeeOther, response)
+
 		return errors.WithStack(registration.ErrHookAbortFlow)
 	}
 
