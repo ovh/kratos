@@ -1,6 +1,8 @@
 package saml_test
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
 	"github.com/instana/testify/require"
+	dsig "github.com/russellhaering/goxmldsig"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 )
@@ -998,6 +1001,166 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		testMiddleware.Middleware.ServeHTTP(resp, req)
 
 		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+	})
+
+	t.Run("case=sign the SAML assertion with own key pair", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
+		doc := etree.NewDocument()
+		doc.SetRoot(responseEl)
+
+		// Get and Decrypt SAML Assertion in order to encrypt it afterwards
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
+
+		// Sign the SAML assertion with an evil key pair
+		keyPair, err := tls.LoadX509KeyPair("./testdata/evilcert.crt", "./testdata/evilkey.key")
+		keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
+		keyStore := dsig.TLSCertKeyStore(keyPair)
+
+		signingContext := dsig.NewDefaultSigningContext(keyStore)
+		signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+		signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+
+		signedAssertionEl, err := signingContext.SignEnveloped(decryptedAssertion)
+
+		// Replace the SAML crypted Assertion in the SAML Response by the assertion signed by our keys
+		ReplaceResponseAssertion(t, responseEl, signedAssertionEl)
+
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		assert.NilError(t, err)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
+		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+	})
+
+	t.Run("case=sign the SAML response with own key pair", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
+		doc := etree.NewDocument()
+
+		// Sign the SAML response with an evil key pair
+		keyPair, err := tls.LoadX509KeyPair("./testdata/evilcert.crt", "./testdata/evilkey.key")
+		keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
+		keyStore := dsig.TLSCertKeyStore(keyPair)
+
+		signingContext := dsig.NewDefaultSigningContext(keyStore)
+		signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+		signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+
+		// Sign the whole response
+		signedResponseEl, err := signingContext.SignEnveloped(responseEl)
+		doc.SetRoot(signedResponseEl)
+
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		fmt.Println(responseStr)
+		assert.NilError(t, err)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+	})
+
+	t.Run("case=sign both of the SAML response and the SAML assertion with own key pair", func(t *testing.T) {
+		// Create the SP, the IdP and the AnthnRequest
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
+		doc := etree.NewDocument()
+		doc.SetRoot(responseEl)
+
+		// Get and Decrypt SAML Assertion in order to encrypt it afterwards
+		decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
+
+		// Sign the SAML assertion with an evil key pair
+		keyPair, err := tls.LoadX509KeyPair("./testdata/evilcert.crt", "./testdata/evilkey.key")
+		keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
+		keyStore := dsig.TLSCertKeyStore(keyPair)
+
+		signingContext := dsig.NewDefaultSigningContext(keyStore)
+		signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+		signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+
+		signedAssertionEl, err := signingContext.SignEnveloped(decryptedAssertion)
+
+		// Replace the SAML crypted Assertion in the SAML Response by the assertion signed by our keys
+		ReplaceResponseAssertion(t, responseEl, signedAssertionEl)
+
+		// Sign the whole response with own keys pairs
+		signedResponseEl, err := signingContext.SignEnveloped(responseEl)
+		doc.SetRoot(signedResponseEl)
+
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		fmt.Println(responseStr)
+		assert.NilError(t, err)
+
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+
+		// Send the SAML Response to the SP ACS
+		resp := httptest.NewRecorder()
+		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
+		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+	})
+
+	// Check if it is possible to send the same SAML Response twice (Replay Attack)
+	t.Run("case=replay attack", func(t *testing.T) {
+
+		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+
+		// Generate the SAML Assertion and the SAML Response
+		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
+
+		// Get Response Element
+		responseEl := authnRequest.ResponseEl
+		doc := etree.NewDocument()
+		doc.SetRoot(responseEl)
+
+		// Get Reponse string
+		responseStr, err := doc.WriteToString()
+		assert.NilError(t, err)
+
+		// Il faut réussir à appeler le Pause ou le simuler du moins
+
+		req1 := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+		resp1 := httptest.NewRecorder()
+
+		//s.handleCallback(resp1, req1, nil)
+
+		// Send the SAML Response to the SP ACS
+		testMiddleware.Middleware.ServeHTTP(resp1, req1)
+
+		assert.Check(t, is.Equal(http.StatusFound, resp1.Code))
+
 	})
 
 }
