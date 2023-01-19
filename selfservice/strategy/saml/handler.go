@@ -93,18 +93,7 @@ func (h *Handler) serveMetadata(w http.ResponseWriter, r *http.Request, ps httpr
 	w.Write(buf)
 }
 
-// swagger:route GET /self-service/methods/saml/auth v0alpha2 initializeSelfServiceSamlFlowForBrowsers
-//
-// Initialize Authentication Flow for SAML (Either the login or the register)
-//
-// If you already have a session, it will redirect you to the main page.
-//
-//	Schemes: http, https
-//
-//	Responses:
-//	  200: selfServiceRegistrationFlow
-//	  400: jsonError
-//	  500: jsonError
+// TODO Swagger
 func (h *Handler) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// Middleware is a singleton so we have to verify that it exists
 	config := h.d.Config()
