@@ -3,7 +3,7 @@ package saml_test
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,16 +12,25 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
-	"github.com/instana/testify/require"
 	dsig "github.com/russellhaering/goxmldsig"
+	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 )
 
+type authCodeContainer struct {
+	FlowID string          `json:"flow_id"`
+	State  string          `json:"state"`
+	Traits json.RawMessage `json:"traits"`
+}
+
+type ory_kratos_continuity struct{}
+
 func TestMiddlewareCanParseResponse(t *testing.T) {
+
 	t.Run("case=happy path", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -39,15 +48,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
 
 		// This is the Happy Path, the HTTP response code should be 302 (Found status)
-		assert.Check(t, is.Equal(http.StatusFound, resp.Code))
+		assert.Check(t, !strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=add saml response attribute", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -69,15 +86,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// The SAML Response has been modified, the signature is invalid, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=add saml response element", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -99,15 +124,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// The SAML Response has been modified, the signature is invalid, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=change saml response indent", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -128,15 +161,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// The SAML Response has been modified, the signature is invalid, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=add saml assertion attribute", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -166,15 +207,21 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=add saml assertion element", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -204,15 +251,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=remove saml response signature value", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -235,15 +290,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// The SAML Response signature value can't be removed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=remove saml response signature", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -255,8 +318,8 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		doc.SetRoot(responseEl)
 
 		// Remove the whole Signature element
-		signatureValueEl := doc.FindElement("//Signature")
-		signatureValueEl.Parent().RemoveChild(signatureValueEl)
+		signatureEl := doc.FindElement("//Signature")
+		signatureEl.Parent().RemoveChild(signatureEl)
 
 		// Get Reponse string
 		responseStr, err := doc.WriteToString()
@@ -266,15 +329,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// The SAML Response signature has been removed but the SAML Assertion is still signed
-		assert.Check(t, is.Equal(http.StatusFound, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, !strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=remove saml assertion signature value", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -305,15 +376,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// The SAML Assertion signature value can't be removed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// This is the Happy Path, the HTTP response code should be 302 (Found status)
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=remove saml assertion signature", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -344,16 +423,24 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
+
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
 
 		// The SAML Assertion signature has been removed but the SAML Response is still signed
-		// The SAML Response has been modified, the SAML Response signature is invalid, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// The SAML Response has been modified, the SAML Response signature is invalid, so there is an error
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=remove both saml response signature and saml assertion signature value", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -384,11 +471,20 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
+
+	// TODO
 
 	t.Run("case=add xml comments in saml attributes", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
@@ -462,9 +558,10 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 	// then inserting the original Signature into the XML as a child element of the copied Response.
 	// The assumption being that the XML parser finds and uses the copied Response at the top of
 	// the document after signature validation instead of the original signed Response.
+
 	t.Run("case=xsw1 response wrap 1", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -498,17 +595,26 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// Similar to XSW #1, XSW #2 manipulates SAML Responses.
 	// The key difference between #1 and #2 is that the type of Signature used is a detached signature where XSW #1 used an enveloping signature.
 	// The location of the malicious Response remains the same.
+
 	t.Run("case=xsw2 response wrap 2", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -543,14 +649,24 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// XSW #3 is the first example of an XSW that wraps the Assertion element.
 	// It inserts the copied Assertion as the first child of the root Response element.
 	// The original Assertion is a sibling of the copied Assertion.
+	// TODO
+
 	t.Run("case=xsw3 assertion wrap 1", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -608,9 +724,10 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 	})
 
 	// XSW #4 is similar to #3, except in this case the original Assertion becomes a child of the copied Assertion.
+
 	t.Run("case=xsw4 assertion wrap 2", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -652,20 +769,25 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-		require.Error(t, err)
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
-		assert.Check(t, resp.Code == http.StatusForbidden)
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// XSW #5 is the first instance of Assertion wrapping we see where the Signature and the original Assertion aren’t in one of the three standard configurations (enveloped/enveloping/detached).
 	// In this case, the copied Assertion envelopes the Signature.
+
 	t.Run("case=xsw5 assertion wrap 3", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -706,19 +828,25 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-		require.Error(t, err)
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		assert.Check(t, (resp.Code == http.StatusForbidden))
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// XSW #6 inserts its copied Assertion into the same location as #’s 4 and 5.
 	// The interesting piece here is that the copied Assertion envelopes the Signature, which in turn envelopes the original Assertion.
+
 	t.Run("case=xsw6 assertion wrap 4", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -759,19 +887,24 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-		require.Error(t, err)
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
-		assert.Check(t, (resp.Code == http.StatusForbidden))
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// XSW #7 inserts an Extensions element and adds the copied Assertion as a child. Extensions is a valid XML element with a less restrictive schema definition.
+
 	t.Run("case=xsw7 assertion wrap 5", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -813,20 +946,25 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-		require.Error(t, err)
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
-		assert.Check(t, resp.Code == http.StatusForbidden)
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// XSW #8 uses another less restrictive XML element to perform a variation of the attack pattern used in XSW #7.
 	// This time around the original Assertion is the child of the less restrictive element instead of the copied Assertion.
+
 	t.Run("case=xsw8 assertion wrap 6", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -865,19 +1003,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		_, err = testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-		require.Error(t, err)
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
-		assert.Check(t, (resp.Code == http.StatusForbidden))
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// If the response was meant for a different Service Provider, the current Service Provider should notice it and reject the authentication
 	t.Run("case=token recipient confusion", func(t *testing.T) {
 
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Change the ACS Endpoint location in order to change the recipient in the SAML Assertion
 		authnRequest.ACSEndpoint.Location = "https://test.com"
@@ -898,16 +1040,23 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// This is the Happy Path, the HTTP response code should be 302 (Found status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 
 	})
 
 	t.Run("case=xml external entity", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -924,21 +1073,26 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		responseStr, err := doc.WriteToString()
 		assert.NilError(t, err)
 
-		fmt.Println(xee + responseStr)
-
 		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, xee+responseStr)
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// This is the Happy Path, the HTTP response code should be 302 (Found status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=extensible stylesheet language transformation", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -957,22 +1111,28 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Get Reponse string
 		responseStr, err := doc.WriteToString()
-		fmt.Println(responseStr)
 		assert.NilError(t, err)
 
 		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// This is the Happy Path, the HTTP response code should be 302 (Found status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=expired saml reponse", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -998,14 +1158,22 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=sign the SAML assertion with own key pair", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -1040,15 +1208,22 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=sign the SAML response with own key pair", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -1072,21 +1247,28 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Get Reponse string
 		responseStr, err := doc.WriteToString()
-		fmt.Println(responseStr)
 		assert.NilError(t, err)
 
 		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	t.Run("case=sign both of the SAML response and the SAML assertion with own key pair", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -1119,23 +1301,30 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Get Reponse string
 		responseStr, err := doc.WriteToString()
-		fmt.Println(responseStr)
 		assert.NilError(t, err)
 
 		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusForbidden, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
+
+		// We make sure that continuity is respected
+		ps := initRouterParams()
+
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
 	// Check if it is possible to send the same SAML Response twice (Replay Attack)
+	// TODO
 	t.Run("case=replay attack", func(t *testing.T) {
 
-		testMiddleware, _, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
+		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		// Generate the SAML Assertion and the SAML Response
 		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
@@ -1149,18 +1338,21 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		responseStr, err := doc.WriteToString()
 		assert.NilError(t, err)
 
-		// Il faut réussir à appeler le Pause ou le simuler du moins
+		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+		resp := httptest.NewRecorder()
 
-		req1 := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
-		resp1 := httptest.NewRecorder()
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		//s.handleCallback(resp1, req1, nil)
+		// We make sure that continuity is respected
+		ps := initRouterParams()
 
-		// Send the SAML Response to the SP ACS
-		testMiddleware.Middleware.ServeHTTP(resp1, req1)
+		// We send the request once to Kratos, everything is in order so there should be no error.
+		strategy.HandleCallback(resp, req, ps)
+		assert.Check(t, !strings.Contains(resp.HeaderMap["Location"][0], "error"))
 
-		assert.Check(t, is.Equal(http.StatusFound, resp1.Code))
-
+		// We send the same request a second time to Kratos, it has already been received by Kratos so there must be an error
+		strategy.HandleCallback(resp, req, ps)
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
-
 }

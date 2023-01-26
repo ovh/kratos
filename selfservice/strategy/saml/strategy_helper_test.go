@@ -102,7 +102,7 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	ts, _ := testhelpers.NewKratosServerWithRouters(t, reg, routerP, routerA)
 
 	attributesMap := make(map[string]string)
-	attributesMap["id"] = "mail"
+	attributesMap["id"] = "urn:oid:0.9.2342.19200300.100.1.1"
 	attributesMap["firstname"] = "givenName"
 	attributesMap["lastname"] = "sn"
 	attributesMap["email"] = "mail"

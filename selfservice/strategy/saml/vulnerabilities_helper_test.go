@@ -20,7 +20,12 @@ import (
 	"github.com/crewjam/saml/logger"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/crewjam/saml/xmlenc"
+	"github.com/julienschmidt/httprouter"
+	"github.com/ory/kratos/continuity"
+	"github.com/ory/kratos/selfservice/flow"
+	"github.com/ory/kratos/selfservice/flow/login"
 	samlhandler "github.com/ory/kratos/selfservice/strategy/saml"
+	"github.com/ory/kratos/x"
 
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v4"
@@ -204,6 +209,30 @@ func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, *samlhandler.Strateg
 	authnRequest, authnRequestID := NewTestIdpAuthnRequest(t, &testIDP.IDP, acsURL, testMiddleware.Middleware.ServiceProvider.EntityID)
 
 	return testMiddleware, strategy, testIDP, authnRequest, authnRequestID
+}
+
+func startContinuity(resp *httptest.ResponseRecorder, r *http.Request, strategy *samlhandler.Strategy) {
+	conf := strategy.D().Config()
+	f, _ := login.NewFlow(conf, conf.SelfServiceFlowLoginRequestLifespan(r.Context()), strategy.D().GenerateCSRFToken(r), r, flow.TypeBrowser)
+	strategy.D().LoginFlowPersister().CreateLoginFlow(r.Context(), f)
+	state := x.NewUUID().String()
+
+	strategy.D().RelayStateContinuityManager().Pause(r.Context(), resp, r, "ory_kratos_saml_auth_code_session",
+		continuity.WithPayload(&authCodeContainer{
+			State:  state,
+			FlowID: f.ID.String(),
+		}),
+		continuity.WithLifespan(time.Minute*30))
+}
+
+func initRouterParams() httprouter.Params {
+	ps := httprouter.Params{
+		httprouter.Param{
+			Key:   "provider",
+			Value: "samlProvider",
+		},
+	}
+	return ps
 }
 
 func prepareTestEnvironmentTwoServiceProvider(t *testing.T) (*MiddlewareTest, *MiddlewareTest, *samlhandler.Strategy, *IdentityProviderTest, saml.IdpAuthnRequest, string) {
