@@ -258,8 +258,8 @@ func prepareTestEnvironmentTwoServiceProvider(t *testing.T) (*MiddlewareTest, *M
 func PrepareTestSAMLResponse(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string) saml.IdpAuthnRequest {
 	// User session
 	userSession := &saml.Session{
-		ID:       "f00df00df00d",
-		UserName: "alice",
+		ID:        "f00df00df00d",
+		UserEmail: "alice@example.com",
 	}
 
 	return PrepareTestSAMLResponseWithSession(t, testMiddleware, authnRequest, authnRequestID, userSession)
@@ -327,14 +327,4 @@ func RemoveResponseSignature(responseDoc *etree.Document) {
 func RemoveAssertionSignature(responseDoc *etree.Document) {
 	assertionSignatureEl := responseDoc.FindElement("//Assertion/Signature")
 	assertionSignatureEl.Parent().RemoveChild(assertionSignatureEl)
-}
-
-func Delete(j []string, selector string) []string {
-	var r []string
-	for _, str := range j {
-		if str != selector {
-			r = append(r, str)
-		}
-	}
-	return r
 }

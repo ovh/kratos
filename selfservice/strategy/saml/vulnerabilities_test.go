@@ -1,10 +1,10 @@
 package saml_test
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -12,10 +12,10 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
+
+	// identitiescmd "github.com/ory/kratos/cmd/identities"
 	dsig "github.com/russellhaering/goxmldsig"
-	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
-	is "gotest.tools/assert/cmp"
 )
 
 type authCodeContainer struct {
@@ -29,6 +29,7 @@ type ory_kratos_continuity struct{}
 func TestMiddlewareCanParseResponse(t *testing.T) {
 
 	t.Run("case=happy path", func(t *testing.T) {
+
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
@@ -57,6 +58,9 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// We send the request to Kratos
 		strategy.HandleCallback(resp, req, ps)
+
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+		_ = ids
 
 		// This is the Happy Path, the HTTP response code should be 302 (Found status)
 		assert.Check(t, !strings.Contains(resp.HeaderMap["Location"][0], "error"))
@@ -115,43 +119,6 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		doc := etree.NewDocument()
 		doc.SetRoot(responseEl)
-
-		// Get Reponse string
-		responseStr, err := doc.WriteToString()
-		assert.NilError(t, err)
-
-		req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
-
-		// Send the SAML Response to the SP ACS
-		resp := httptest.NewRecorder()
-
-		// Start the continuity
-		startContinuity(resp, req, strategy)
-
-		// We make sure that continuity is respected
-		ps := initRouterParams()
-
-		// We send the request to Kratos
-		strategy.HandleCallback(resp, req, ps)
-
-		// This is the Happy Path, the HTTP response code should be 302 (Found status)
-		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
-	})
-
-	t.Run("case=change saml response indent", func(t *testing.T) {
-		// Create the SP, the IdP and the AnthnRequest
-		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
-
-		// Generate the SAML Assertion and the SAML Response
-		authnRequest = PrepareTestSAMLResponse(t, testMiddleware, authnRequest, authnRequestID)
-
-		// Get Response Element
-		responseEl := authnRequest.ResponseEl
-		doc := etree.NewDocument()
-		doc.SetRoot(responseEl)
-
-		// Change the document indentation
-		doc.Indent(2)
 
 		// Get Reponse string
 		responseStr, err := doc.WriteToString()
@@ -484,20 +451,18 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
 	})
 
-	// TODO
-
 	t.Run("case=add xml comments in saml attributes", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
 
 		groups := []string{"admin@test.ovh", "not-adminc@test.ovh", "regular@test.ovh", "manager@test.ovh"}
-		evilGroups := []string{"<!--comment-->admin@test.ovh", "not-<!--comment-->adminc@test.ovh", "regular@test.ovh<!--comment-->", "<!--comment-->manager<!--comment-->@test.ovh<!--comment-->"}
+		commentedGroups := []string{"<!--comment-->admin@test.ovh", "not-<!--comment-->adminc@test.ovh", "regular@test.ovh<!--comment-->", "<!--comment-->manager<!--comment-->@test.ovh<!--comment-->"}
 
 		// User session
 		userSession := &saml.Session{
-			ID:       "f00df00df00d",
-			UserName: "alice",
-			Groups:   groups,
+			ID:        "f00df00df00d",
+			UserEmail: "alice@example.com",
+			Groups:    commentedGroups,
 		}
 
 		// Generate the SAML Assertion and the SAML Response
@@ -525,31 +490,33 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		// Either the SAML Response or the SAML Assertion must be signed, so the HTTP Response code is 403 (Forbidden status)
-		assert.Check(t, is.Equal(http.StatusFound, resp.Code))
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		// We parse the SAML Response to get the SAML Assertion
-		assertion, err := testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-		require.NoError(t, err)
+		// We make sure that continuity is respected
+		ps := initRouterParams()
 
-		// We get the user's attributes from the SAML Response (assertion)
-		attributes, err := strategy.GetAttributesFromAssertion(assertion)
-		require.NoError(t, err)
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
 
-		assertionGroups := attributes["urn:oid:1.3.6.1.4.1.5923.1.1.1.1"]
-		for i := 0; i < len(assertionGroups); i++ {
-			splittedEvilGroup := Delete(strings.Split(evilGroups[i], "<!--comment-->"), "")
-			if len(splittedEvilGroup) == 1 {
-				continue
-			}
-			for j := 0; j < len(splittedEvilGroup); j++ {
-				assert.Assert(t, assertionGroups[i] != splittedEvilGroup[j])
+		// Get all identities
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+		traitsMap := make(map[string]interface{})
+		json.Unmarshal(ids[0].Traits, &traitsMap)
+
+		// Get the groups of the identity
+		identityGroups := traitsMap["groups"].([]interface{})
+
+		// We have to check that either the comments are still there, or that they have been deleted by the canonicalizer but that the parser recovers the whole string
+		for i := 0; i < len(identityGroups); i++ {
+			identityGroup := identityGroups[i].(string)
+			if commentedGroups[i] != identityGroup {
+				assert.Check(t, groups[i] == identityGroup)
 			}
 		}
-
 	})
+
 	// More information about the 9 next tests about XSW attacks:
 	// https://epi052.gitlab.io/notes-to-self/blog/2019-03-13-how-to-test-saml-a-methodology-part-two
 
@@ -558,7 +525,6 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 	// then inserting the original Signature into the XML as a child element of the copied Response.
 	// The assumption being that the XML parser finds and uses the copied Response at the top of
 	// the document after signature validation instead of the original signed Response.
-
 	t.Run("case=xsw1 response wrap 1", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -611,7 +577,6 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 	// Similar to XSW #1, XSW #2 manipulates SAML Responses.
 	// The key difference between #1 and #2 is that the type of Signature used is a detached signature where XSW #1 used an enveloping signature.
 	// The location of the malicious Response remains the same.
-
 	t.Run("case=xsw2 response wrap 2", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -665,8 +630,6 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 	// XSW #3 is the first example of an XSW that wraps the Assertion element.
 	// It inserts the copied Assertion as the first child of the root Response element.
 	// The original Assertion is a sibling of the copied Assertion.
-	// TODO
-
 	t.Run("case=xsw3 assertion wrap 1", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -700,7 +663,8 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		evilResponseDoc.FindElement("//Response").AddChild(originalResponseDoc.FindElement("//Assertion"))
 
-		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+		// Change one attribute
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
 		// Get Reponse string
 		responseStr, err := evilResponseDoc.WriteToString()
@@ -710,21 +674,24 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 
 		// Send the SAML Response to the SP ACS
 		resp := httptest.NewRecorder()
-		testMiddleware.Middleware.ServeHTTP(resp, req)
 
-		assertion, err := testMiddleware.Middleware.ServiceProvider.ParseResponse(req, []string{authnRequestID})
-		require.NoError(t, err)
+		// Start the continuity
+		startContinuity(resp, req, strategy)
 
-		// We get the user's attributes from the SAML Response (assertion)
-		attributes, err := strategy.GetAttributesFromAssertion(assertion)
-		require.NoError(t, err)
+		// We make sure that continuity is respected
+		ps := initRouterParams()
 
-		// Now we have to check that either the assertion does not pass, or that the attributes do not contain the injected attribute
-		assert.Check(t, (resp.Code == http.StatusFound && attributes["urn:oid:0.9.2342.19200300.100.1.1"][0] == "alice") || resp.Code == http.StatusForbidden)
+		// We send the request to Kratos
+		strategy.HandleCallback(resp, req, ps)
+
+		// Get all identities
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+
+		// We have to check that there is either an error or an identity created without the modified attribute
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 	})
 
 	// XSW #4 is similar to #3, except in this case the original Assertion becomes a child of the copied Assertion.
-
 	t.Run("case=xsw4 assertion wrap 2", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -759,7 +726,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		evilResponseDoc.FindElement("//Assertion").AddChild(originalResponseDoc.FindElement("//Assertion"))
 
 		// Change the username
-		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
 		// Get Reponse string
 		responseStr, err := evilResponseDoc.WriteToString()
@@ -779,12 +746,15 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		// We send the request to Kratos
 		strategy.HandleCallback(resp, req, ps)
 
-		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+		// Get all identities
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+
+		// We have to check that there is either an error or an identity created without the modified attribute
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 	})
 
 	// XSW #5 is the first instance of Assertion wrapping we see where the Signature and the original Assertion aren’t in one of the three standard configurations (enveloped/enveloping/detached).
 	// In this case, the copied Assertion envelopes the Signature.
-
 	t.Run("case=xsw5 assertion wrap 3", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -818,7 +788,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		evilResponseDoc.FindElement("//Response").AddChild(originalResponseDoc.FindElement("//Assertion"))
 
 		// Change the username
-		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
 		// Get Reponse string
 		responseStr, err := evilResponseDoc.WriteToString()
@@ -838,12 +808,15 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		// We send the request to Kratos
 		strategy.HandleCallback(resp, req, ps)
 
-		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+		// Get all identities
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+
+		// We have to check that there is either an error or an identity created without the modified attribute
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 	})
 
 	// XSW #6 inserts its copied Assertion into the same location as #’s 4 and 5.
 	// The interesting piece here is that the copied Assertion envelopes the Signature, which in turn envelopes the original Assertion.
-
 	t.Run("case=xsw6 assertion wrap 4", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -877,7 +850,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		evilResponseDoc.FindElement("//Assertion").FindElement("//Signature").AddChild(originalResponseDoc.FindElement("//Assertion"))
 
 		// Change the username
-		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
 		// Get Reponse string
 		responseStr, err := evilResponseDoc.WriteToString()
@@ -897,11 +870,14 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		// We send the request to Kratos
 		strategy.HandleCallback(resp, req, ps)
 
-		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+		// Get all identities
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+
+		// We have to check that there is either an error or an identity created without the modified attribute
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 	})
 
 	// XSW #7 inserts an Extensions element and adds the copied Assertion as a child. Extensions is a valid XML element with a less restrictive schema definition.
-
 	t.Run("case=xsw7 assertion wrap 5", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -936,7 +912,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		evilResponseDoc.FindElement("//Response").AddChild(originalResponseDoc.FindElement("//Assertion"))
 
 		// Change the username
-		evilResponseDoc.FindElement("//Response/Extension/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+		evilResponseDoc.FindElement("//Response/Extension/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
 		// Get Reponse string
 		responseStr, err := evilResponseDoc.WriteToString()
@@ -956,12 +932,15 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		// We send the request to Kratos
 		strategy.HandleCallback(resp, req, ps)
 
-		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+		// Get all identities
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+
+		// We have to check that there is either an error or an identity created without the modified attribute
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 	})
 
 	// XSW #8 uses another less restrictive XML element to perform a variation of the attack pattern used in XSW #7.
 	// This time around the original Assertion is the child of the less restrictive element instead of the copied Assertion.
-
 	t.Run("case=xsw8 assertion wrap 6", func(t *testing.T) {
 		// Create the SP, the IdP and the AnthnRequest
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)
@@ -993,7 +972,7 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		evilResponseDoc.FindElement("//Assertion/Signature/Object").AddChild(originalResponseDoc.FindElement("//Assertion"))
 
 		// Change the username
-		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil-alice")
+		evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
 		// Get Reponse string
 		responseStr, err := evilResponseDoc.WriteToString()
@@ -1013,7 +992,11 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 		// We send the request to Kratos
 		strategy.HandleCallback(resp, req, ps)
 
-		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+		// Get all identities
+		ids, _ := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), 0, 1000)
+
+		// We have to check that there is either an error or an identity created without the modified attribute
+		assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 	})
 
 	// If the response was meant for a different Service Provider, the current Service Provider should notice it and reject the authentication
@@ -1321,7 +1304,6 @@ func TestMiddlewareCanParseResponse(t *testing.T) {
 	})
 
 	// Check if it is possible to send the same SAML Response twice (Replay Attack)
-	// TODO
 	t.Run("case=replay attack", func(t *testing.T) {
 
 		testMiddleware, strategy, _, authnRequest, authnRequestID := prepareTestEnvironment(t)

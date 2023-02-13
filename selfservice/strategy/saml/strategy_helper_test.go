@@ -102,10 +102,11 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*samlsp
 	ts, _ := testhelpers.NewKratosServerWithRouters(t, reg, routerP, routerA)
 
 	attributesMap := make(map[string]string)
-	attributesMap["id"] = "urn:oid:0.9.2342.19200300.100.1.1"
+	attributesMap["id"] = "urn:oid:1.3.6.1.4.1.5923.1.1.1.6"
 	attributesMap["firstname"] = "givenName"
 	attributesMap["lastname"] = "sn"
-	attributesMap["email"] = "mail"
+	attributesMap["email"] = "urn:oid:1.3.6.1.4.1.5923.1.1.1.6"
+	attributesMap["groups"] = "urn:oid:1.3.6.1.4.1.5923.1.1.1.1"
 
 	// Initiates the service provider
 	ViperSetProviderConfig(
