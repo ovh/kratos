@@ -2,11 +2,17 @@ package saml_test
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
+	"github.com/ory/kratos/continuity"
+	"github.com/ory/kratos/selfservice/flow"
+	"github.com/ory/kratos/selfservice/flow/login"
+	"github.com/ory/x/sqlxx"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,15 +26,10 @@ import (
 	"github.com/crewjam/saml/logger"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/crewjam/saml/xmlenc"
-	"github.com/julienschmidt/httprouter"
-	"github.com/ory/kratos/continuity"
-	"github.com/ory/kratos/selfservice/flow"
-	"github.com/ory/kratos/selfservice/flow/login"
-	samlhandler "github.com/ory/kratos/selfservice/strategy/saml"
-	"github.com/ory/kratos/x"
-
 	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/julienschmidt/httprouter"
+	samlhandler "github.com/ory/kratos/selfservice/strategy/saml"
 	dsig "github.com/russellhaering/goxmldsig"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
@@ -81,26 +82,8 @@ func setSAMLTimeNow(timeStr string) {
 	saml.Clock = dsig.NewFakeClockAt(TimeNow())
 }
 
-func (test *MiddlewareTest) makeTrackedRequest(id string) (string, string) {
-	uuid, _ := uuid.NewV4()
-
-	codec := test.Middleware.RequestTracker.(samlsp.CookieRequestTracker).Codec
-	index := uuid.String()
-	token, err := codec.Encode(samlsp.TrackedRequest{
-		Index:         index,
-		SAMLRequestID: id,
-		URI:           "/frob",
-	})
-	if err != nil {
-		panic(err)
-	}
-	return token, index
-}
-
 func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *samlhandler.Strategy, *httptest.Server) {
 	middlewareTest := MiddlewareTest{}
-
-	samlhandler.DestroyMiddlewareIfExists("samlProvider")
 
 	_, middleWare, strategy, ts, err := InitTestMiddlewareWithMetadata(t, "file://testdata/idp_metadata.xml")
 	if err != nil {
@@ -121,7 +104,7 @@ func NewMiddlewareTest(t *testing.T) (*MiddlewareTest, *samlhandler.Strategy, *h
 	return &middlewareTest, strategy, ts
 }
 
-func NewIdentifyProviderTest(t *testing.T, serviceProvider saml.ServiceProvider, tsURL string) *IdentityProviderTest {
+func NewIdentifyProviderTest(t *testing.T, serviceProvider saml.ServiceProvider, _ string) *IdentityProviderTest {
 	IDPtest := IdentityProviderTest{}
 
 	IDPtest.SP = serviceProvider
@@ -153,9 +136,9 @@ func NewIdentifyProviderTest(t *testing.T, serviceProvider saml.ServiceProvider,
 }
 
 func NewIdpAuthnRequest(t *testing.T, idp *saml.IdentityProvider, acsURL string, issuer string, destination string, issueInstant string) (saml.IdpAuthnRequest, string) {
-	uuid, err := uuid.NewV4()
+	idUUID, err := uuid.NewV4()
 	assert.NilError(t, err)
-	id := "id-" + strings.Replace(uuid.String(), "-", "", -1)
+	id := "id-" + strings.Replace(idUUID.String(), "-", "", -1)
 
 	authnRequest := saml.IdpAuthnRequest{
 		Now: TimeNow(),
@@ -211,20 +194,6 @@ func prepareTestEnvironment(t *testing.T) (*MiddlewareTest, *samlhandler.Strateg
 	return testMiddleware, strategy, testIDP, authnRequest, authnRequestID
 }
 
-func startContinuity(resp *httptest.ResponseRecorder, r *http.Request, strategy *samlhandler.Strategy) {
-	conf := strategy.D().Config()
-	f, _ := login.NewFlow(conf, conf.SelfServiceFlowLoginRequestLifespan(r.Context()), strategy.D().GenerateCSRFToken(r), r, flow.TypeBrowser)
-	strategy.D().LoginFlowPersister().CreateLoginFlow(r.Context(), f)
-	state := x.NewUUID().String()
-
-	strategy.D().ContinuityManager().Pause(r.Context(), resp, r, "ory_kratos_saml_auth_code_session",
-		continuity.WithPayload(&authCodeContainer{
-			State:  state,
-			FlowID: f.ID.String(),
-		}),
-		continuity.WithLifespan(time.Minute*30), continuity.UseRelayState())
-}
-
 func initRouterParams() httprouter.Params {
 	ps := httprouter.Params{
 		httprouter.Param{
@@ -233,26 +202,6 @@ func initRouterParams() httprouter.Params {
 		},
 	}
 	return ps
-}
-
-func prepareTestEnvironmentTwoServiceProvider(t *testing.T) (*MiddlewareTest, *MiddlewareTest, *samlhandler.Strategy, *IdentityProviderTest, saml.IdpAuthnRequest, string) {
-	// Set timeNow for SAML Requests and Responses
-	setSAMLTimeNow("Wed Jan 1 01:57:09.123456789 UTC 2014")
-
-	// Create a SAML SP
-	testMiddleware, strategy, ts := NewMiddlewareTest(t)
-
-	// Create a SAML IdP
-	testIDP := NewIdentifyProviderTest(t, testMiddleware.Middleware.ServiceProvider, ts.URL)
-
-	// SP ACS URL
-	acsURL := ts.URL + "/self-service/methods/saml/acs/samlProvider"
-
-	// Create a SAML AuthnRequest as it would be taken into account by the IdP
-	// so that it can send the SAML Response back to the SP via the SP ACS
-	authnRequest, authnRequestID := NewTestIdpAuthnRequest(t, &testIDP.IDP, acsURL, testMiddleware.Middleware.ServiceProvider.EntityID)
-
-	return testMiddleware, nil, strategy, testIDP, authnRequest, authnRequestID
 }
 
 func PrepareTestSAMLResponse(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string) saml.IdpAuthnRequest {
@@ -265,33 +214,50 @@ func PrepareTestSAMLResponse(t *testing.T, testMiddleware *MiddlewareTest, authn
 	return PrepareTestSAMLResponseWithSession(t, testMiddleware, authnRequest, authnRequestID, userSession)
 }
 
-func PrepareTestSAMLResponseWithSession(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string, userSession *saml.Session) saml.IdpAuthnRequest {
+func PrepareTestSAMLResponseWithSession(t *testing.T, _ *MiddlewareTest, authnRequest saml.IdpAuthnRequest, _ string, userSession *saml.Session) saml.IdpAuthnRequest {
 	// Make SAML Assertion
 	MakeAssertion(t, &authnRequest, userSession)
 
 	// Make SAML Response
-	authnRequest.MakeResponse()
+	err := authnRequest.MakeResponse()
+	require.NoError(t, err)
 
 	return authnRequest
 }
 
-func PrepareTestSAMLResponseHTTPRequest(t *testing.T, testMiddleware *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string, responseStr string) *http.Request {
+func PrepareTestSAMLResponseHTTPRequest(t *testing.T, strategy *samlhandler.Strategy, _ *MiddlewareTest, authnRequest saml.IdpAuthnRequest, authnRequestID string, responseStr string) *http.Request {
+	conf := strategy.D().Config()
+	req := authnRequest.HTTPRequest
+	f, _ := login.NewFlow(conf, conf.SelfServiceFlowLoginRequestLifespan(context.Background()), strategy.D().GenerateCSRFToken(req), req, flow.TypeBrowser)
+	err := strategy.D().LoginFlowPersister().CreateLoginFlow(context.Background(), f)
+	require.NoError(t, err)
+
+	var b bytes.Buffer
+	err = json.NewEncoder(&b).Encode(authCodeContainer{
+		FlowID:    f.GetID().String(),
+		RequestID: authnRequestID,
+	})
+	require.NoError(t, err)
+	c := continuity.Container{
+		ID:        uuid.Nil,
+		Name:      "saml_request",
+		ExpiresAt: time.Now().Add(time.Minute * 10).UTC().Truncate(time.Second),
+		Payload:   sqlxx.NullJSONRawMessage(b.Bytes()),
+	}
+	err = strategy.D().ContinuityPersister().SaveContinuitySession(context.Background(), &c)
+	require.NoError(t, err)
+
 	// Prepare SAMLResponse body attribute
 	v1 := &url.Values{}
 	v1.Set("SAMLResponse", base64.StdEncoding.EncodeToString([]byte(responseStr)))
+	v1.Set("RelayState", c.ID.String())
 
 	// Set SAML AuthnRequest HTTP Request body with the SAML Response
-	req := authnRequest.HTTPRequest
-	req, err := http.NewRequest(req.Method, req.URL.String(), bytes.NewReader([]byte(v1.Encode())))
+	req, err = http.NewRequest(req.Method, req.URL.String(), bytes.NewReader([]byte(v1.Encode())))
 	assert.NilError(t, err)
 
-	// Make tracked request and get its index
-	trackedRequestToken, trackedRequestIndex := testMiddleware.makeTrackedRequest(authnRequestID)
-
-	// Set SAML AuthnRequest HTTP Request headers Content-Type and session cookie
+	// Set SAML AuthnRequest HTTP Request headers Content-Type
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Cookie", ""+
-		"saml_"+trackedRequestIndex+"="+trackedRequestToken)
 
 	return req
 }
@@ -306,13 +272,14 @@ func GetAndDecryptAssertionEl(t *testing.T, testMiddleware *MiddlewareTest, resp
 	require.NoError(t, err)
 	stringAssertion := string(plaintextAssertion)
 	newAssertion := etree.NewDocument()
-	newAssertion.ReadFromString(stringAssertion)
+	err = newAssertion.ReadFromString(stringAssertion)
+	require.NoError(t, err)
 
 	return newAssertion.Root()
 }
 
 // Replace the Encrypted Assertion by the modified Assertion
-func ReplaceResponseAssertion(t *testing.T, responseEl *etree.Element, newAssertionEl *etree.Element) {
+func ReplaceResponseAssertion(_ *testing.T, responseEl *etree.Element, newAssertionEl *etree.Element) {
 	encryptedAssertionEl := responseEl.FindElement("//EncryptedAssertion")
 	encryptedAssertionEl.Parent().RemoveChild(encryptedAssertionEl)
 	responseEl.AddChild(newAssertionEl)

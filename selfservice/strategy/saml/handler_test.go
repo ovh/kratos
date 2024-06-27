@@ -1,7 +1,7 @@
 package saml_test
 
 import (
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/ory/kratos/selfservice/strategy/saml"
@@ -15,8 +15,6 @@ func TestInitMiddleWareWithMetadata(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
-	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, middleWare, _, _, err := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -32,8 +30,6 @@ func TestInitMiddleWareWithoutMetadata(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
-	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, middleWare, _, _, err := InitTestMiddlewareWithoutMetadata(t,
 		"https://samltest.id/idp/profile/SAML2/Redirect/SSO",
@@ -53,13 +49,9 @@ func TestGetMiddleware(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
-	_, _, _, _, err := InitTestMiddlewareWithMetadata(t,
+	_, middleWare, _, _, err := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 	require.NoError(t, err)
-
-	middleWare, err := saml.GetMiddleware("samlProvider")
 
 	require.NoError(t, err)
 	assert.Check(t, middleWare != nil)
@@ -73,12 +65,10 @@ func TestMustParseCertificate(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	certificateBuffer, err := fetcher.NewFetcher().Fetch("file://testdata/samlkratos.crt")
 	require.NoError(t, err)
 
-	certificate, err := ioutil.ReadAll(certificateBuffer)
+	certificate, err := io.ReadAll(certificateBuffer)
 	require.NoError(t, err)
 
 	cert, err := saml.MustParseCertificate(certificate)

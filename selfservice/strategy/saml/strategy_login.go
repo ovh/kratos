@@ -3,13 +3,9 @@ package saml
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/gofrs/uuid"
 	"github.com/julienschmidt/httprouter"
-	"github.com/ory/x/urlx"
-	"net/http"
-	"time"
-
 	"github.com/ory/herodot"
-	"github.com/ory/kratos/continuity"
 	"github.com/ory/kratos/identity"
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/selfservice/flow/login"
@@ -18,15 +14,36 @@ import (
 	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/node"
 	"github.com/ory/kratos/x"
+	"github.com/ory/x/urlx"
 	"github.com/pkg/errors"
+	"net/http"
 )
 
 // Implement the interface
 var _ login.Strategy = new(Strategy)
 
-// Call at the creation of Kratos, when Kratos implement all authentication routes
+// RegisterLoginRoutes Call at the creation of Kratos, when Kratos implement all authentication routes
 func (s *Strategy) RegisterLoginRoutes(r *x.RouterPublic) {
 	s.setRoutes(r)
+}
+
+// Start of webview flow
+//
+// swagger:route GET /self-service/methods/saml/auth v0alpha2 initializeSelfServiceSamlFlowForBrowsers
+func (s *Strategy) loginWithIdp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	flowID := r.URL.Query().Get("flow")
+	if flowID == "" {
+		s.d.SelfServiceErrorManager().Forward(r.Context(), w, r, errors.New(`Missing "flow" parameter`))
+	}
+
+	f, err := s.validateFlow(r.Context(), r, uuid.FromStringOrNil(flowID))
+	if err != nil {
+		s.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+	}
+
+	if err := s.doLogin(w, r, f.(*login.Flow), ps.ByName("provider")); err != nil {
+		s.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
+	}
 }
 
 // SubmitSelfServiceLoginFlowWithSAMLMethodBody is used to decode the login form payload
@@ -77,7 +94,7 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login
 	return nil, nil
 }
 
-func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, _ *session.Session) (i *identity.Identity, err error) {
+func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, _ *session.Session) (*identity.Identity, error) {
 	if err := login.CheckAAL(f, identity.AuthenticatorAssuranceLevel1); err != nil {
 		return nil, err
 	}
@@ -92,55 +109,54 @@ func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, 
 		return nil, errors.WithStack(flow.ErrStrategyNotResponsible)
 	}
 
-	if err := flow.MethodEnabledAndAllowed(r.Context(), f.GetFlowName(), s.ID().String(), s.ID().String(), s.d); err != nil {
+	if x.IsJSONRequest(r) {
+		url := urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()), RouteBaseAuth+"/"+pid)
+		v := url.Query()
+		v.Set("flow", f.ID.String())
+		url.RawQuery = v.Encode()
+		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(url.String()))
+		return nil, flow.ErrCompletedByStrategy
+	}
+
+	_, err := s.validateFlow(r.Context(), r, f.ID)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if err := s.doLogin(w, r, f, pid); err != nil {
 		return nil, s.handleError(w, r, f, pid, nil, err)
 	}
 
-	req, err := s.validateFlow(r.Context(), r, f.ID)
-	if err != nil {
-		return nil, s.handleError(w, r, f, pid, nil, err)
+	return nil, flow.ErrCompletedByStrategy
+}
+
+func (s *Strategy) doLogin(w http.ResponseWriter, r *http.Request, f *login.Flow, pid string) error {
+	if err := flow.MethodEnabledAndAllowed(r.Context(), f.GetFlowName(), s.ID().String(), s.ID().String(), s.d); err != nil {
+		return err
 	}
 
 	providersConfigCollection, err := GetProvidersConfigCollection(r.Context(), s.d.Config())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	_, err = providersConfigCollection.ProviderConfig(pid)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if s.alreadyAuthenticated(w, r, req) {
-		return
+	if s.alreadyAuthenticated(w, r, f) {
+		return err
 	}
 
-	state := generateState(f.ID.String())
-	if err := s.d.ContinuityManager().Pause(r.Context(), w, r, sessionName,
-		continuity.WithPayload(&authCodeContainer{
-			State:  state,
-			FlowID: f.ID.String(),
-			Traits: p.Traits,
-		}),
-		continuity.WithLifespan(time.Minute*30), continuity.UseRelayState()); err != nil {
-		return nil, s.handleError(w, r, f, pid, nil, err)
+	if err := s.startSAMLFlow(w, r, f, pid); err != nil {
+		return err
 	}
 
 	f.Active = s.ID()
 	if err = s.d.LoginFlowPersister().UpdateLoginFlow(r.Context(), f); err != nil {
-		return nil, s.handleError(w, r, f, pid, nil, errors.WithStack(herodot.ErrInternalServerError.WithReason("Could not update flow").WithDebug(err.Error())))
+		return errors.WithStack(herodot.ErrInternalServerError.WithReason("Could not update flow").WithDebug(err.Error()))
 	}
-
-	url := urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()), RouteBaseAuth+"/"+pid)
-	if x.IsJSONRequest(r) {
-		q := url.Query()
-		q.Set("flow", f.ID.String())
-		url.RawQuery = q.Encode()
-		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(url.String()))
-	} else {
-		http.Redirect(w, r, url.String(), http.StatusSeeOther)
-	}
-
-	return nil, errors.WithStack(flow.ErrCompletedByStrategy)
+	return nil
 }
 
 func (s *Strategy) RegisterAdminLoginRoutes(r *x.RouterAdmin) {

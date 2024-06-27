@@ -3,20 +3,20 @@ package saml
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"github.com/ory/kratos/cipher"
 	"github.com/ory/kratos/schema"
 	"github.com/ory/kratos/selfservice/sessiontokenexchange"
 	"github.com/ory/x/jsonnetsecure"
+	"github.com/ory/x/sqlcon"
+	"github.com/ory/x/sqlxx"
 	"github.com/ory/x/urlx"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
-	"github.com/crewjam/saml"
-	"github.com/crewjam/saml/samlsp"
+	samlidp "github.com/crewjam/saml"
 	"github.com/gofrs/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
@@ -100,10 +100,13 @@ type dependencies interface {
 	settings.HookExecutorProvider
 
 	continuity.ManagementProvider
+	continuity.PersistenceProvider
 
 	cipher.Provider
 
 	jsonnetsecure.VMProvider
+
+	MiddlewareManagerProvider
 }
 
 func (s *Strategy) ID() identity.CredentialsType {
@@ -132,14 +135,10 @@ type Strategy struct {
 }
 
 type authCodeContainer struct {
-	FlowID string          `json:"flow_id"`
-	State  string          `json:"state"`
-	Traits json.RawMessage `json:"traits"`
-}
-
-func generateState(flowID string) string {
-	state := x.NewUUID().String()
-	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", flowID, state)))
+	FlowID    string          `json:"flow_id"`
+	RequestID string          `json:"request_id"`
+	State     string          `json:"state"`
+	Traits    json.RawMessage `json:"traits"`
 }
 
 func NewStrategy(d dependencies) *Strategy {
@@ -160,25 +159,15 @@ func (s *Strategy) setRoutes(r *x.RouterPublic) {
 		s.d.CSRFHandler().IgnorePath(RouteProviderCollection)
 		r.GET(RouteProviderCollection, x.RedirectToAdminRoute(s.d))
 	}
-}
 
-// Get possible SAML Request IDs
-func GetPossibleRequestIDs(r *http.Request, m samlsp.Middleware) []string {
-	possibleRequestIDs := []string{}
-	if m.ServiceProvider.AllowIDPInitiated {
-		possibleRequestIDs = append(possibleRequestIDs, "")
+	wrappedHandleCallback = strategy.IsDisabled(s.d, s.ID().String(), s.loginWithIdp)
+	if handle, _, _ := r.Lookup("GET", RouteAuth); handle == nil {
+		r.GET(RouteAuth, wrappedHandleCallback)
 	}
-
-	trackedRequests := m.RequestTracker.GetTrackedRequests(r)
-	for _, tr := range trackedRequests {
-		possibleRequestIDs = append(possibleRequestIDs, tr.SAMLRequestID)
-	}
-
-	return possibleRequestIDs
 }
 
 // Retrieves the user's attributes from the SAML Assertion
-func (s *Strategy) GetAttributesFromAssertion(assertion *saml.Assertion) (map[string][]string, error) {
+func (s *Strategy) GetAttributesFromAssertion(assertion *samlidp.Assertion) (map[string][]string, error) {
 
 	if assertion == nil {
 		return nil, errors.New("The assertion is nil")
@@ -254,22 +243,40 @@ func (s *Strategy) alreadyAuthenticated(w http.ResponseWriter, r *http.Request, 
 	return false
 }
 
-func (s *Strategy) validateCallback(w http.ResponseWriter, r *http.Request) (flow.Flow, *authCodeContainer, error) {
-	var cntnr authCodeContainer
-	if _, err := s.d.ContinuityManager().Continue(r.Context(), w, r, sessionName, continuity.WithPayload(&cntnr), continuity.UseRelayState()); err != nil {
-		return nil, nil, err
+func (s *Strategy) validateCallback(_ http.ResponseWriter, r *http.Request) (flow.Flow, *authCodeContainer, error) {
+	continuitySessionID := r.PostForm.Get("RelayState")
+	if continuitySessionID == "" {
+		return nil, nil, errors.WithStack(errors.New("RelayState is not set in request"))
 	}
 
-	req, err := s.validateFlow(r.Context(), r, x.ParseUUID(cntnr.FlowID))
+	id, err := uuid.FromString(continuitySessionID)
 	if err != nil {
-		return nil, &cntnr, err
+		return nil, nil, errors.WithStack(err)
+	}
+	continuitySession, err := s.d.ContinuityPersister().GetContinuitySession(r.Context(), id)
+	if err != nil {
+		return nil, nil, errors.WithStack(err)
+	}
+
+	var codeContainer authCodeContainer
+	if err := json.NewDecoder(bytes.NewBuffer(continuitySession.Payload)).Decode(&codeContainer); err != nil {
+		return nil, nil, errors.WithStack(err)
+	}
+
+	req, err := s.validateFlow(r.Context(), r, x.ParseUUID(codeContainer.FlowID))
+	if err != nil {
+		return nil, &codeContainer, errors.WithStack(err)
+	}
+
+	if err := s.d.ContinuityPersister().DeleteContinuitySession(r.Context(), id); err != nil && !errors.Is(err, sqlcon.ErrNoRows) {
+		return nil, nil, errors.WithStack(err)
 	}
 
 	if r.URL.Query().Get("error") != "" {
-		return req, &cntnr, errors.WithStack(herodot.ErrBadRequest.WithReasonf(`Unable to complete SAML flow because the SAML Provider returned error "%s": %s`, r.URL.Query().Get("error"), r.URL.Query().Get("error_description")))
+		return req, &codeContainer, errors.WithStack(herodot.ErrBadRequest.WithReasonf(`Unable to complete SAML flow because the SAML Provider returned error "%s": %s`, r.URL.Query().Get("error"), r.URL.Query().Get("error_description")))
 	}
 
-	return req, &cntnr, nil
+	return req, &codeContainer, nil
 }
 
 // Handle /selfservice/methods/saml/acs/:provider | Receive SAML response, parse the attributes and start auth flow
@@ -284,7 +291,7 @@ func (s *Strategy) HandleCallback(w http.ResponseWriter, r *http.Request, ps htt
 
 	s.d.Logger().WithField("SAMLResponse", r.PostForm.Get("SAMLResponse")).Debug("Received SAML Response")
 
-	req, _, err := s.validateCallback(w, r)
+	req, c, err := s.validateCallback(w, r)
 	if err != nil {
 		if req != nil {
 			s.forwardError(w, r, req, s.handleError(w, r, req, pid, nil, err))
@@ -294,17 +301,15 @@ func (s *Strategy) HandleCallback(w http.ResponseWriter, r *http.Request, ps htt
 		return
 	}
 
-	m, err := GetMiddleware(pid)
+	m, err := s.d.SAMLMiddlewareManager().GetMiddleware(r.Context(), pid)
 	if err != nil {
 		s.forwardError(w, r, req, s.handleError(w, r, req, pid, nil, err))
 		return
 	}
 
-	// We get the possible SAML request IDs
-	possibleRequestIDs := GetPossibleRequestIDs(r, *m)
-	assertion, err := m.ServiceProvider.ParseResponse(r, possibleRequestIDs)
+	assertion, err := m.ServiceProvider.ParseResponse(r, []string{c.RequestID})
 	if err != nil {
-		sErr, ok := err.(*saml.InvalidResponseError)
+		sErr, ok := err.(*samlidp.InvalidResponseError)
 		if ok {
 			s.d.Logger().WithError(sErr.PrivateErr).Debug("Error parsing SAML Response")
 		}
@@ -559,7 +564,7 @@ func (s *Strategy) CountActiveFirstFactorCredentials(cc map[identity.Credentials
 	return
 }
 
-func (s *Strategy) CountActiveMultiFactorCredentials(cc map[identity.CredentialsType]identity.Credentials) (count int, err error) {
+func (s *Strategy) CountActiveMultiFactorCredentials(_ map[identity.CredentialsType]identity.Credentials) (count int, err error) {
 	return 0, nil
 }
 
@@ -568,4 +573,31 @@ func (s *Strategy) CompletedAuthenticationMethod(_ context.Context, _ session.Au
 		Method: s.ID(),
 		AAL:    identity.AuthenticatorAssuranceLevel1,
 	}
+}
+
+func (s *Strategy) startSAMLFlow(w http.ResponseWriter, r *http.Request, f flow.Flow, pid string) error {
+	middleware, err := s.d.SAMLMiddlewareManager().GetMiddleware(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(authCodeContainer{
+		FlowID: f.GetID().String(),
+	}); err != nil {
+		return err
+	}
+	c := continuity.Container{
+		ID:        uuid.Nil,
+		Name:      "saml_request",
+		ExpiresAt: time.Now().Add(time.Minute * 10).UTC().Truncate(time.Second),
+		Payload:   sqlxx.NullJSONRawMessage(b.Bytes()),
+	}
+
+	if err := s.d.ContinuityPersister().SaveContinuitySession(r.Context(), &c); err != nil {
+		return err
+	}
+	middleware.HandleStartAuthFlow(w, r.WithContext(context.WithValue(r.Context(), continuitySessionIDKey, c.ID)))
+
+	return nil
 }

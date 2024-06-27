@@ -7,7 +7,6 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/ory/herodot"
 	"github.com/ory/jsonschema/v3"
-	"github.com/ory/kratos/continuity"
 	"github.com/ory/kratos/identity"
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/selfservice/flow/settings"
@@ -16,7 +15,6 @@ import (
 	"github.com/ory/kratos/x"
 	"github.com/ory/x/decoderx"
 	"github.com/ory/x/sqlxx"
-	"github.com/ory/x/urlx"
 	"github.com/pkg/errors"
 	"github.com/tidwall/sjson"
 	"net/http"
@@ -317,26 +315,11 @@ func (s *Strategy) initLinkProvider(w http.ResponseWriter, r *http.Request, ctxU
 		return s.handleSettingsError(w, r, ctxUpdate, p, err)
 	}
 
-	state := generateState(ctxUpdate.Flow.ID.String())
-	if err := s.d.ContinuityManager().Pause(r.Context(), w, r, sessionName,
-		continuity.WithPayload(&authCodeContainer{
-			State:  state,
-			FlowID: ctxUpdate.Flow.ID.String(),
-			Traits: p.Traits,
-		}),
-		continuity.WithLifespan(time.Minute*30)); err != nil {
+	if err := s.startSAMLFlow(w, r, ctxUpdate.Flow, p.Link); err != nil {
 		return s.handleSettingsError(w, r, ctxUpdate, p, err)
 	}
 
-	if x.IsJSONRequest(r) {
-		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(
-			urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()), RouteBaseAuth+"/"+p.Link).String()))
-	} else {
-		http.Redirect(w, r,
-			urlx.AppendPaths(s.d.Config().SelfPublicURL(r.Context()), RouteBaseAuth+"/"+p.Link).String(), http.StatusSeeOther)
-	}
-
-	return errors.WithStack(flow.ErrCompletedByStrategy)
+	return flow.ErrCompletedByStrategy
 }
 
 func (s *Strategy) linkProvider(w http.ResponseWriter, r *http.Request, ctxUpdate *settings.UpdateContext, claims *Claims, provider Provider) error {

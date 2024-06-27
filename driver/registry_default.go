@@ -126,7 +126,8 @@ type RegistryDefault struct {
 	selfserviceLoginHandler             *login.Handler
 	selfserviceLoginRequestErrorHandler *login.ErrorHandler
 
-	selfserviceSAMLHandler *saml.Handler
+	selfserviceSAMLHandler           *saml.Handler
+	selfserviceSAMLMiddlewareManager *saml.MiddlewareManager
 
 	selfserviceSettingsHandler      *settings.Handler
 	selfserviceSettingsErrorHandler *settings.ErrorHandler
@@ -157,9 +158,10 @@ type RegistryDefault struct {
 
 	csrfTokenGenerator x.CSRFToken
 
-	jsonnetVMProvider jsonnetsecure.VMProvider
-	jsonnetPool       jsonnetsecure.Pool
-	jwkFetcher        *jwksx.FetcherNext
+	jsonnetVMProvider               jsonnetsecure.VMProvider
+	jsonnetPool                     jsonnetsecure.Pool
+	jwkFetcher                      *jwksx.FetcherNext
+	continuitySessionRequestTracker *saml.ContinuitySessionRequestTracker
 }
 
 func (m *RegistryDefault) JsonnetVM(ctx context.Context) (jsonnetsecure.VM, error) {
@@ -890,4 +892,11 @@ func (m *RegistryDefault) SessionTokenizer() *session.Tokenizer {
 		m.sessionTokenizer = session.NewTokenizer(m)
 	}
 	return m.sessionTokenizer
+}
+
+func (m *RegistryDefault) ContinuitySessionRequestTracker() *saml.ContinuitySessionRequestTracker {
+	if m.continuitySessionRequestTracker == nil {
+		m.continuitySessionRequestTracker = saml.NewContinuitySessionRequestTracker(m)
+	}
+	return m.continuitySessionRequestTracker
 }

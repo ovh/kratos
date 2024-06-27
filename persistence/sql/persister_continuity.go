@@ -6,6 +6,7 @@ package sql
 import (
 	"context"
 	"fmt"
+	"github.com/ory/x/sqlxx"
 	"time"
 
 	"github.com/pkg/errors"
@@ -37,6 +38,23 @@ func (p *Persister) SetContinuitySessionExpiry(ctx context.Context, id uuid.UUID
 		UpdateQuery(&continuity.Container{
 			ExpiresAt: expiresAt,
 		}, "expires_at"); err != nil {
+		return sqlcon.HandleError(err)
+	} else if rows == 0 {
+		return errors.WithStack(sqlcon.ErrNoRows)
+	}
+
+	return nil
+}
+
+func (p *Persister) SetContinuityPayload(ctx context.Context, id uuid.UUID, payload sqlxx.NullJSONRawMessage) (err error) {
+	ctx, span := p.r.Tracer(ctx).Tracer().Start(ctx, "persistence.sql.SetContinuityPayload")
+	defer otelx.End(span, &err)
+
+	if rows, err := p.GetConnection(ctx).
+		Where("id = ? AND nid = ?", id, p.NetworkID(ctx)).
+		UpdateQuery(&continuity.Container{
+			Payload: payload,
+		}, "payload"); err != nil {
 		return sqlcon.HandleError(err)
 	} else if rows == 0 {
 		return errors.WithStack(sqlcon.ErrNoRows)

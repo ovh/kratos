@@ -5,6 +5,7 @@ package driver
 
 import (
 	"context"
+	"github.com/ory/kratos/selfservice/strategy/saml"
 	"io/fs"
 
 	"github.com/ory/kratos/selfservice/sessiontokenexchange"
@@ -156,6 +157,8 @@ type Registry interface {
 	recovery.StrategyProvider
 
 	x.CSRFTokenGeneratorProvider
+
+	saml.ContinuitySessionRequestTrackerProvider
 }
 
 func NewRegistryFromDSN(ctx context.Context, c *config.Config, l *logrusx.Logger) (Registry, error) {

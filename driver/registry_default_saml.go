@@ -9,3 +9,11 @@ func (m *RegistryDefault) SAMLHandler() *saml.Handler {
 
 	return m.selfserviceSAMLHandler
 }
+
+func (m *RegistryDefault) SAMLMiddlewareManager() *saml.MiddlewareManager {
+	if m.selfserviceSAMLMiddlewareManager == nil {
+		m.selfserviceSAMLMiddlewareManager = saml.NewMiddlewareManager(m)
+	}
+
+	return m.selfserviceSAMLMiddlewareManager
+}

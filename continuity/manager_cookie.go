@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
-	"github.com/gorilla/sessions"
 	"github.com/pkg/errors"
 
 	"github.com/ory/herodot"
@@ -75,12 +74,12 @@ func (m *ManagerCookie) Continue(ctx context.Context, w http.ResponseWriter, r *
 	ctx, span := m.d.Tracer(ctx).Tracer().Start(ctx, "continuity.ManagerCookie.Continue")
 	defer otelx.End(span, &err)
 
-	o, err := newManagerOptions(opts)
+	container, err = m.container(ctx, w, r, name)
 	if err != nil {
 		return nil, err
 	}
 
-	container, err = m.container(ctx, w, r, name, o.useRelayState)
+	o, err := newManagerOptions(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -116,15 +115,8 @@ func (m *ManagerCookie) Continue(ctx context.Context, w http.ResponseWriter, r *
 	return container, nil
 }
 
-func (m *ManagerCookie) sessionID(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, useRelayState bool) (uuid.UUID, error) {
-	var getStringFunction func(r *http.Request, s sessions.StoreExact, id string, key interface{}) (string, error)
-	if useRelayState {
-		getStringFunction = x.SessionGetStringRelayState
-	} else {
-		getStringFunction = x.SessionGetString
-	}
-
-	s, err := getStringFunction(r, m.d.ContinuityCookieManager(ctx), CookieName, name)
+func (m *ManagerCookie) sessionID(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, error) {
+	s, err := x.SessionGetString(r, m.d.ContinuityCookieManager(ctx), CookieName, name)
 	if err != nil {
 		_ = x.SessionUnsetKey(w, r, m.d.ContinuityCookieManager(ctx), CookieName, name)
 		return uuid.Nil, errors.WithStack(ErrNotResumable.WithDebugf("%+v", err))
@@ -139,8 +131,8 @@ func (m *ManagerCookie) sessionID(ctx context.Context, w http.ResponseWriter, r 
 	return sid, nil
 }
 
-func (m *ManagerCookie) container(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, useRelayState bool) (*Container, error) {
-	sid, err := m.sessionID(ctx, w, r, name, useRelayState)
+func (m *ManagerCookie) container(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) (*Container, error) {
+	sid, err := m.sessionID(ctx, w, r, name)
 	if err != nil {
 		return nil, err
 	}
@@ -163,16 +155,10 @@ func (m *ManagerCookie) container(ctx context.Context, w http.ResponseWriter, r 
 	return container, err
 }
 
-func (m ManagerCookie) Abort(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, opts ...ManagerOption) (err error) {
+func (m ManagerCookie) Abort(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) (err error) {
 	ctx, span := m.d.Tracer(ctx).Tracer().Start(ctx, "continuity.ManagerCookie.Abort")
 	defer otelx.End(span, &err)
-
-	o, err := newManagerOptions(opts)
-	if err != nil {
-		return err
-	}
-
-	sid, err := m.sessionID(ctx, w, r, name, o.useRelayState)
+	sid, err := m.sessionID(ctx, w, r, name)
 	if errors.Is(err, &ErrNotResumable) {
 		// We do not care about an error here
 		return nil

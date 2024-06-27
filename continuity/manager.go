@@ -23,16 +23,15 @@ type ManagementProvider interface {
 type Manager interface {
 	Pause(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, opts ...ManagerOption) error
 	Continue(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, opts ...ManagerOption) (*Container, error)
-	Abort(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, opts ...ManagerOption) error
+	Abort(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) error
 }
 
 type managerOptions struct {
-	iid           uuid.UUID
-	ttl           time.Duration
-	setExpiresIn  time.Duration
-	payload       json.RawMessage
-	payloadRaw    interface{}
-	useRelayState bool
+	iid          uuid.UUID
+	ttl          time.Duration
+	setExpiresIn time.Duration
+	payload      json.RawMessage
+	payloadRaw   interface{}
 }
 
 type ManagerOption func(*managerOptions) error
@@ -80,13 +79,6 @@ func WithPayload(payload interface{}) ManagerOption {
 func WithExpireInsteadOfDelete(duration time.Duration) ManagerOption {
 	return func(o *managerOptions) error {
 		o.setExpiresIn = duration
-		return nil
-	}
-}
-
-func UseRelayState() ManagerOption {
-	return func(o *managerOptions) error {
-		o.useRelayState = true
 		return nil
 	}
 }

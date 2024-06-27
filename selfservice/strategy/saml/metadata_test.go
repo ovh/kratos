@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ory/kratos/selfservice/strategy/saml"
 	"github.com/ory/x/fetcher"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
@@ -68,8 +67,6 @@ func TestXmlMetadataExist(t *testing.T) {
 		t.Skip()
 	}
 
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	_, _, _, ts, err := InitTestMiddlewareWithMetadata(t, "file://testdata/SP_IDPMetadata.xml")
 	assert.NilError(t, err)
 	res, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
@@ -84,8 +81,6 @@ func TestXmlMetadataValues(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
-	saml.DestroyMiddlewareIfExists("samlProvider")
 
 	_, _, _, ts, _ := InitTestMiddlewareWithMetadata(t, "file://testdata/SP_IDPMetadata.xml")
 	res, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")

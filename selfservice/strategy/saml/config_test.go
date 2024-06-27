@@ -2,7 +2,7 @@ package saml_test
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/ory/kratos/driver/config"
@@ -15,8 +15,6 @@ import (
 )
 
 func TestInitSAMLWithoutProvider(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -51,13 +49,11 @@ func TestInitSAMLWithoutProvider(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please indicate a SAML Identity Provider in your configuration file")
 }
 
 func TestInitSAMLWithoutPoviderID(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -101,13 +97,11 @@ func TestInitSAMLWithoutPoviderID(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Invalid SAML configuration in the configuration file")
 }
 
 func TestInitSAMLWithoutPoviderLabel(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -151,13 +145,11 @@ func TestInitSAMLWithoutPoviderLabel(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Provider must have a label")
 }
 
 func TestAttributesMapWithoutID(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -200,14 +192,12 @@ func TestAttributesMapWithoutID(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "You must have an ID field in your attribute_map")
 
 }
 
 func TestAttributesMapWithAnExtraField(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -252,14 +242,12 @@ func TestAttributesMapWithAnExtraField(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "metadata")
 
 }
 
 func TestInitSAMLWithoutIDPInformation(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -296,13 +284,11 @@ func TestInitSAMLWithoutIDPInformation(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please include your Identity Provider information in the configuration file.")
 }
 
 func TestInitSAMLWithMissingIDPInformationField(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -345,13 +331,11 @@ func TestInitSAMLWithMissingIDPInformationField(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please check your IDP information in the configuration file")
 }
 
 func TestInitSAMLWithExtraIDPInformationField(t *testing.T) {
-	saml.DestroyMiddlewareIfExists("samlProvider")
-
 	conf, reg := internal.NewFastRegistryWithMocks(t)
 	//strategy := saml.NewStrategy(reg)
 	errTS := testhelpers.NewErrorTestServer(t, reg)
@@ -396,6 +380,6 @@ func TestInitSAMLWithExtraIDPInformationField(t *testing.T) {
 	t.Logf("Kratos Error URL: %s", errTS.URL)
 
 	resp, _ := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	assert.Contains(t, string(body), "Please check your IDP information in the configuration file")
 }

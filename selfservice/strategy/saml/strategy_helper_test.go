@@ -3,7 +3,6 @@ package saml_test
 import (
 	"context"
 	"crypto"
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -16,7 +15,7 @@ import (
 	"github.com/ory/x/resilience"
 	"github.com/phayes/freeport"
 	"golang.org/x/net/html"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -41,9 +40,8 @@ import (
 )
 
 var TimeNow = func() time.Time { return time.Now().UTC() }
-var RandReader = rand.Reader
 
-func ViperSetProviderConfig(t *testing.T, conf *config.Config, SAMLProvider ...saml.Configuration) {
+func ViperSetProviderConfig(_ *testing.T, conf *config.Config, SAMLProvider ...saml.Configuration) {
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &saml.ConfigurationCollection{SAMLProviders: SAMLProvider})
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".enabled", true)
 }
@@ -225,7 +223,7 @@ func InitTestMiddleware(t *testing.T, idpInformation map[string]string) (*config
 	// Instantiates the MiddleWare
 	_, err := NewTestClient(t, nil).Get(ts.URL + "/self-service/methods/saml/metadata/samlProvider")
 	require.NoError(t, err)
-	middleware, err := saml.GetMiddleware("samlProvider")
+	middleware, err := reg.SAMLMiddlewareManager().GetMiddleware(context.Background(), "samlProvider")
 	require.NoError(t, err)
 	//middleware.ServiceProvider.Key = mustParsePrivateKey(golden.Get(t, "sp_key.pem")).(*rsa.PrivateKey)
 	//middleware.ServiceProvider.Certificate = mustParseCertificate(golden.Get(t, "sp_cert.pem"))
@@ -257,7 +255,7 @@ func GetAndDecryptAssertion(t *testing.T, samlResponseFile string, key *rsa.Priv
 	samlResponseBuffer, err := fetcher.NewFetcher().Fetch("file://" + samlResponseFile)
 	require.NoError(t, err)
 
-	samlResponse, err := ioutil.ReadAll(samlResponseBuffer)
+	samlResponse, err := io.ReadAll(samlResponseBuffer)
 	require.NoError(t, err)
 
 	// Decrypt saml response assertion
@@ -320,7 +318,7 @@ func getAttribute(n *html.Node, key string) (string, bool) {
 	return "", false
 }
 
-func viperSetProviderConfig(t *testing.T, conf *config.Config, providers ...saml.Configuration) {
+func viperSetProviderConfig(_ *testing.T, conf *config.Config, providers ...saml.Configuration) {
 	ctx := context.Background()
 	conf.MustSet(ctx, config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &saml.ConfigurationCollection{SAMLProviders: providers})
 	conf.MustSet(ctx, config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".enabled", true)

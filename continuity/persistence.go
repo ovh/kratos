@@ -5,6 +5,7 @@ package continuity
 
 import (
 	"context"
+	"github.com/ory/x/sqlxx"
 	"time"
 
 	"github.com/gofrs/uuid"
@@ -19,5 +20,6 @@ type Persister interface {
 	GetContinuitySession(ctx context.Context, id uuid.UUID) (*Container, error)
 	DeleteContinuitySession(ctx context.Context, id uuid.UUID) error
 	SetContinuitySessionExpiry(ctx context.Context, id uuid.UUID, expiresAt time.Time) error
+	SetContinuityPayload(ctx context.Context, id uuid.UUID, payload sqlxx.NullJSONRawMessage) error
 	DeleteExpiredContinuitySessions(ctx context.Context, deleteOlder time.Time, pageSize int) error
 }
