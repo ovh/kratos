@@ -87,6 +87,13 @@ func (s *Strategy) registrationToLogin(w http.ResponseWriter, r *http.Request, r
 		return nil, err
 	}
 
+	csrfToken := s.d.CSRFHandler().RegenerateToken(w, r)
+	lf.UI.SetCSRF(csrfToken)
+	lf.CSRFToken = csrfToken
+	if err := s.d.LoginFlowPersister().UpdateLoginFlow(r.Context(), lf); err != nil {
+		return nil, err
+	}
+
 	err = s.d.SessionTokenExchangePersister().MoveToNewFlow(r.Context(), rf.ID, lf.ID)
 	if err != nil {
 		return nil, err

@@ -44,7 +44,7 @@ func (s *Strategy) processLoginOrRegister(w http.ResponseWriter, r *http.Request
 			}
 
 			if err = s.processRegistration(w, r, registerFlow, provider, claims); err != nil {
-				return s.handleError(w, r, loginFlow, provider.Config().ID, nil, err)
+				return err
 			}
 
 			return nil
