@@ -13,6 +13,7 @@ import (
 	"github.com/ory/kratos/selfservice/flow/login"
 	"github.com/ory/kratos/selfservice/sessiontokenexchange"
 	"github.com/ory/kratos/session"
+	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/container"
 	"github.com/ory/kratos/x"
 	"github.com/ory/x/assertx"
@@ -173,7 +174,7 @@ func TestStrategy(t *testing.T) {
 		return result
 	}
 
-	makeAPICodeFlowRequest := func(t *testing.T, provider, action string) (*http.Response, []byte) {
+	makeAPICodeFlowRequest := func(t *testing.T, provider, action string) (returnToURL *url.URL) {
 		res, err := testhelpers.NewDebugClient(t).Post(action, "application/json", strings.NewReader(fmt.Sprintf(`{
 	"method": "saml",
 	"samlProvider": %q
@@ -204,10 +205,15 @@ func TestStrategy(t *testing.T) {
 		relayState := getValueByName(body, "RelayState")
 
 		//Post SAML response to kratos
-		return makeRequestWithClient(t, urlAcs, url.Values{
+		res, _ = makeRequestWithClient(t, urlAcs, url.Values{
 			"SAMLResponse": []string{SAMLResponse},
 			"RelayState":   []string{relayState},
 		}, client, 200)
+
+		returnToURL = res.Request.URL
+		assert.True(t, strings.HasPrefix(returnToURL.String(), returnTS.URL+"/app_code"), "returnToURL: %s", returnToURL)
+
+		return returnToURL
 	}
 
 	exchangeCodeForToken := func(t *testing.T, codes sessiontokenexchange.Codes) (codeResponse session.CodeExchangeResponse, err error) {
@@ -224,6 +230,33 @@ func TestStrategy(t *testing.T) {
 		require.NoError(t, json.NewDecoder(res.Body).Decode(&codeResponse))
 
 		return
+	}
+
+	createPasswordIdentity := func(t *testing.T, password string) *identity.Identity {
+		var err error
+		i, _, err := reg.PrivilegedIdentityPool().FindByCredentialsIdentifier(
+			context.Background(),
+			identity.CredentialsTypePassword,
+			email,
+		)
+		if err != nil && !errors.Is(err, sqlcon.ErrNoRows) {
+			assert.NoError(t, err)
+		}
+		if i != nil {
+			err := reg.PrivilegedIdentityPool().DeleteIdentity(context.Background(), i.ID)
+			assert.NoError(t, err)
+		}
+		i = identity.NewIdentity(config.DefaultIdentityTraitsSchemaID)
+		p, err := reg.Hasher(ctx).Generate(ctx, []byte(password))
+		i.SetCredentials(identity.CredentialsTypePassword, identity.Credentials{
+			Identifiers: []string{email},
+			Config:      sqlxx.JSONRawMessage(`{"hashed_password":"` + string(p) + `"}`),
+		})
+		i.Traits = identity.Traits(`{"email":"` + email + `"}`)
+
+		require.NoError(t, reg.PrivilegedIdentityPool().CreateIdentity(context.Background(), i))
+
+		return i
 	}
 
 	t.Run("case=should fail because provider does not exist", func(t *testing.T) {
@@ -313,10 +346,9 @@ func TestStrategy(t *testing.T) {
 			require.Error(t, err)
 
 			action := afv(t, id, "TestStrategyProvider")
-			res, _ := makeAPICodeFlowRequest(t, "TestStrategyProvider", action)
+			returnToURL := makeAPICodeFlowRequest(t, "TestStrategyProvider", action)
 
-			returnToURL := res.Request.URL
-			assert.True(t, strings.HasPrefix(returnToURL.String(), returnTS.URL+"/app_code"), "%v", res.Request.URL)
+			assert.True(t, strings.HasPrefix(returnToURL.String(), returnTS.URL+"/app_code"), "%v", returnToURL)
 
 			returnToCode := returnToURL.Query().Get("code")
 			assert.NotEmpty(t, code, "code query param was empty in the return_to URL: %s", returnToURL)
@@ -345,43 +377,34 @@ func TestStrategy(t *testing.T) {
 			then:  doLogin,
 		}} {
 			t.Run("case="+tc.name, func(t *testing.T) {
-				//subject = tc.name + "-api-code-testing@ory.sh"
 				tc.first(t)
 				tc.then(t)
 			})
 		}
+		t.Run("case=should use redirect_to URL on failure", func(t *testing.T) {
+			ctx := context.Background()
+			email = "user1@example.com"
+
+			createPasswordIdentity(t, "sldkfj&(79DH")
+
+			f := newLoginFlow(t, returnTS.URL+"?return_session_token_exchange_code=true&return_to=/app_code", 1*time.Minute, flow.TypeAPI)
+
+			_, err := exchangeCodeForToken(t, sessiontokenexchange.Codes{InitCode: f.SessionTokenExchangeCode})
+			require.Error(t, err)
+
+			action := afv(t, f.ID, "TestStrategyProvider")
+			returnToURL := makeAPICodeFlowRequest(t, providerId, action)
+			returnedFlow := returnToURL.Query().Get("flow")
+
+			require.NotEmpty(t, returnedFlow, "flow query param was empty in the return_to URL: %s", returnToURL)
+			loginFlow, err := reg.LoginFlowPersister().GetLoginFlow(ctx, uuid.FromStringOrNil(returnedFlow))
+			require.NoError(t, err)
+			assert.Equal(t, text.ErrorValidationDuplicateCredentials, loginFlow.UI.Messages[0].ID)
+		})
 	})
 
 	t.Run("case=registration should start new login flow if duplicate credentials detected", func(t *testing.T) {
 		require.NoError(t, reg.Config().Set(ctx, config.ViperKeySelfServiceRegistrationLoginHints, true))
-		email = "user1@example.com"
-		password := "lwkj52sdkjf"
-		var i *identity.Identity
-
-		createPasswordIdentity := func(t *testing.T) {
-			var err error
-			i, _, err = reg.PrivilegedIdentityPool().FindByCredentialsIdentifier(
-				context.Background(),
-				identity.CredentialsTypePassword,
-				email,
-			)
-			if err != nil && !errors.Is(err, sqlcon.ErrNoRows) {
-				assert.NoError(t, err)
-			}
-			if i != nil {
-				err := reg.PrivilegedIdentityPool().DeleteIdentity(context.Background(), i.ID)
-				assert.NoError(t, err)
-			}
-			i = identity.NewIdentity(config.DefaultIdentityTraitsSchemaID)
-			p, err := reg.Hasher(ctx).Generate(ctx, []byte(password))
-			i.SetCredentials(identity.CredentialsTypePassword, identity.Credentials{
-				Identifiers: []string{email},
-				Config:      sqlxx.JSONRawMessage(`{"hashed_password":"` + string(p) + `"}`),
-			})
-			i.Traits = identity.Traits(`{"email":"` + email + `"}`)
-
-			require.NoError(t, reg.PrivilegedIdentityPool().CreateIdentity(context.Background(), i))
-		}
 
 		loginWithSaml := func(t *testing.T, c *http.Client, flowID uuid.UUID, statusCode int) (*http.Response, []byte) {
 			action := afv(t, flowID, providerId)
@@ -427,7 +450,9 @@ func TestStrategy(t *testing.T) {
 		}
 
 		t.Run("case=browser", func(t *testing.T) {
-			createPasswordIdentity(t)
+			email = "user1@example.com"
+			password := "lwkj52sdkjf"
+			i := createPasswordIdentity(t, password)
 			c := NewTestClient(t, nil)
 			loginFlow := newLoginFlow(t, returnTS.URL, time.Minute, flow.TypeBrowser)
 			var linkingLoginFlow struct {
@@ -461,47 +486,6 @@ func TestStrategy(t *testing.T) {
 				checkCredentialsLinked(t, false, i.ID, string(body))
 			})
 		})
-
-		//t.Run("case=api", func(t *testing.T) {
-		//	createPasswordIdentity(t)
-		//	loginFlow := newLoginFlow(t, returnTS.URL+"?return_session_token_exchange_code=true&return_to=/app_code", 1*time.Minute, flow.TypeAPI)
-		//	var linkingLoginFlow struct {
-		//		ID        string
-		//		UIAction  string
-		//		CSRFToken string
-		//	}
-		//
-		//	t.Run("case=should fail login and start a new flow", func(t *testing.T) {
-		//		action := afv(t, loginFlow.ID, "TestStrategyProvider")
-		//		res, body := makeAPICodeFlowRequest(t, "TestStrategyProvider", action)
-		//		assert.Equal(t, 200, res.StatusCode)
-		//
-		//		//TODO All the following should be changed after implementing PS-207
-		//		aue(t, res, body, "You tried signing in with user1@example.com which is already in use by another account. You can sign in using your password.")
-		//		assert.Equal(t, "password", gjson.GetBytes(body, "ui.messages.#(id==4000028).context.available_credential_types.0").String())
-		//		assert.Equal(t, "user1@example.com", gjson.GetBytes(body, "ui.messages.#(id==4000028).context.credential_identifier_hint").String())
-		//		linkingLoginFlow.ID = gjson.GetBytes(body, "id").String()
-		//		linkingLoginFlow.UIAction = gjson.GetBytes(body, "ui.action").String()
-		//		linkingLoginFlow.CSRFToken = gjson.GetBytes(body, `ui.nodes.#(attributes.name=="csrf_token").attributes.value`).String()
-		//		assert.NotEqual(t, loginFlow.ID.String(), linkingLoginFlow.ID, "should have started a new flow")
-		//		assert.Equal(t, "api", gjson.GetBytes(body, "type").String())
-		//	})
-		//
-		//	t.Run("case=should link saml credentials to existing identity", func(t *testing.T) {
-		//		var values = func(v url.Values) {
-		//			v.Set("method", "password")
-		//			v.Set("identifier", email)
-		//			v.Set("password", password)
-		//		}
-		//		body := testhelpers.SubmitLoginForm(t, true, nil, ts, values,
-		//			false, false, http.StatusOK, ts.URL+login.RouteSubmitFlow)
-		//		assert.Equal(t, email, gjson.Get(body, "session.identity.traits.email").String(), "%s", body)
-		//		st := gjson.Get(body, "session_token").String()
-		//		assert.NotEmpty(t, st, "%s", body)
-		//
-		//		checkCredentialsLinked(t, true, i.ID, body)
-		//	})
-		//})
 	})
 }
 

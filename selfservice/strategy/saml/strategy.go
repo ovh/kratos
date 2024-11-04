@@ -453,7 +453,19 @@ func (s *Strategy) handleError(w http.ResponseWriter, r *http.Request, f flow.Fl
 				return err
 			}
 			// return a new login flow with the error message embedded in the login flow.
-			redirectURL := lf.AppendTo(s.d.Config().SelfServiceFlowLoginUI(r.Context()))
+			var redirectURL *url.URL
+			if lf.Type == flow.TypeAPI {
+				returnTo := s.d.Config().SelfServiceBrowserDefaultReturnTo(r.Context())
+				if redirecter, ok := f.(flow.FlowWithRedirect); ok {
+					secureReturnTo, err := x.SecureRedirectTo(r, returnTo, redirecter.SecureRedirectToOpts(r.Context(), s.d)...)
+					if err == nil {
+						returnTo = secureReturnTo
+					}
+				}
+				redirectURL = lf.AppendTo(returnTo)
+			} else {
+				redirectURL = lf.AppendTo(s.d.Config().SelfServiceFlowLoginUI(r.Context()))
+			}
 			if dc, err := flow.DuplicateCredentials(lf); err == nil && dc != nil {
 				redirectURL = urlx.CopyWithQuery(redirectURL, url.Values{"no_org_ui": {"true"}})
 
