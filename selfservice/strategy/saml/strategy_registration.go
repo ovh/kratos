@@ -3,7 +3,10 @@ package saml
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/ory/herodot"
 	"github.com/ory/kratos/selfservice/flow/login"
+	"github.com/ory/x/otelx"
+	"github.com/ory/x/urlx"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -108,6 +111,25 @@ func (s *Strategy) registrationToLogin(w http.ResponseWriter, r *http.Request, r
 }
 
 func (s *Strategy) processRegistration(w http.ResponseWriter, r *http.Request, a *registration.Flow, provider Provider, claims *Claims) error {
+	if _, _, err := s.d.PrivilegedIdentityPool().FindByCredentialsIdentifier(r.Context(), identity.CredentialsTypeSAML, identity.SAMLUniqueID(provider.Config().ID, claims.Subject)); err == nil {
+		// If the identity already exists, we should perform the login flow instead.
+
+		s.d.Logger().WithRequest(r).WithField("provider", provider.Config().ID).
+			WithField("subject", claims.Subject).
+			Debug("Received successful SAML callback but user is already registered. Re-initializing login flow now.")
+
+		lf, err := s.registrationToLogin(w, r, a, provider.Config().ID)
+		if err != nil {
+			return s.handleError(w, r, a, provider.Config().ID, nil, err)
+		}
+
+		if _, err := s.processLogin(w, r, lf, provider, claims); err != nil {
+			return s.handleError(w, r, a, provider.Config().ID, nil, err)
+		}
+
+		return nil
+	}
+
 	i, err := s.createIdentity(w, r, a, claims, provider)
 	if err != nil {
 		return s.handleError(w, r, a, provider.Config().ID, nil, err)
@@ -167,7 +189,74 @@ func (s *Strategy) newLinkDecoder(p interface{}, r *http.Request) error {
 	return nil
 }
 
-// Not needed in SAML
+// SubmitSelfServiceRegistrationFlowWithSAMLMethodBody is used to decode the registration form payload
+// when using the saml method.
+//
+// swagger:model SubmitSelfServiceRegistrationFlowWithSAMLMethodBody
+type SubmitSelfServiceRegistrationFlowWithSAMLMethodBody struct {
+	// The provider to register with
+	//
+	// required: true
+	Provider string `json:"samlProvider"`
+
+	// The CSRF Token
+	CSRFToken string `json:"csrf_token"`
+
+	// Method to use
+	//
+	// This field must be set to `saml` when using the saml method.
+	//
+	// required: true
+	Method string `json:"method"`
+}
+
 func (s *Strategy) Register(w http.ResponseWriter, r *http.Request, f *registration.Flow, i *identity.Identity) (err error) {
-	return flow.ErrStrategyNotResponsible
+	ctx, span := s.d.Tracer(r.Context()).Tracer().Start(r.Context(), "selfservice.strategy.saml.strategy.Register")
+	defer otelx.End(span, &err)
+
+	var p SubmitSelfServiceRegistrationFlowWithSAMLMethodBody
+	if err := s.newLinkDecoder(&p, r); err != nil {
+		return s.handleError(w, r, f, "", nil, errors.WithStack(herodot.ErrBadRequest.WithDebug(err.Error()).WithReasonf("Unable to parse HTTP form request: %s", err.Error())))
+	}
+
+	var pid = p.Provider // This can come from both url query and post body
+	if pid == "" {
+		return errors.WithStack(flow.ErrStrategyNotResponsible)
+	}
+
+	if x.IsJSONRequest(r) {
+		url := urlx.AppendPaths(s.d.Config().SelfPublicURL(ctx), RouteBaseAuth+"/"+pid)
+		v := url.Query()
+		v.Set("flow", f.ID.String())
+		url.RawQuery = v.Encode()
+		s.d.Writer().WriteError(w, r, flow.NewBrowserLocationChangeRequiredError(url.String()))
+		return flow.ErrCompletedByStrategy
+	}
+
+	if err := flow.MethodEnabledAndAllowed(ctx, f.GetFlowName(), s.ID().String(), s.ID().String(), s.d); err != nil {
+		return err
+	}
+
+	providersConfigCollection, err := GetProvidersConfigCollection(ctx, s.d.Config())
+	if err != nil {
+		return err
+	}
+	_, err = providersConfigCollection.ProviderConfig(pid)
+	if err != nil {
+		return err
+	}
+
+	if s.alreadyAuthenticated(w, r, f) {
+		return err
+	}
+
+	if err := s.startSAMLFlow(w, r, f, pid); err != nil {
+		return err
+	}
+
+	f.Active = s.ID()
+	if err = s.d.RegistrationFlowPersister().UpdateRegistrationFlow(ctx, f); err != nil {
+		return errors.WithStack(herodot.ErrInternalServerError.WithReason("Could not update flow").WithDebug(err.Error()))
+	}
+	return nil
 }

@@ -1,0 +1,40 @@
+{
+  "method": "POST",
+  "nodes": [
+    {
+      "type": "input",
+      "group": "default",
+      "attributes": {
+        "name": "csrf_token",
+        "type": "hidden",
+        "required": true,
+        "disabled": false,
+        "node_type": "input"
+      },
+      "messages": [],
+      "meta": {}
+    },
+    {
+      "type": "input",
+      "group": "saml",
+      "attributes": {
+        "name": "samlProvider",
+        "type": "submit",
+        "value": "TestStrategyProvider",
+        "disabled": false,
+        "node_type": "input"
+      },
+      "messages": [],
+      "meta": {
+        "label": {
+          "id": 1040002,
+          "text": "Sign up with SAML IdP 1",
+          "type": "info",
+          "context": {
+            "provider": "SAML IdP 1"
+          }
+        }
+      }
+    }
+  ]
+}

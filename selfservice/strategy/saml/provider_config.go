@@ -37,6 +37,7 @@ type Configuration struct {
 }
 
 type ConfigurationCollection struct {
+	AutoRegister  bool            `json:"auto_register"`
 	SAMLProviders []Configuration `json:"providers"`
 }
 

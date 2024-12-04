@@ -339,9 +339,21 @@ func (s *Strategy) HandleCallback(w http.ResponseWriter, r *http.Request, ps htt
 	}
 
 	switch a := req.(type) {
+	case *registration.Flow:
+		if err := s.processRegistration(w, r, a, provider, claims); err != nil {
+			if errors.Is(err, flow.ErrCompletedByStrategy) {
+				return
+			}
+			// Need to re-fetch flow as it might has been updated
+			updatedFlow, innerErr := s.d.LoginFlowPersister().GetLoginFlow(r.Context(), a.ID)
+			if innerErr != nil {
+				s.forwardError(w, r, a, innerErr)
+			}
+			s.forwardError(w, r, updatedFlow, err)
+		}
+		return
 	case *login.Flow:
-		// Now that we have the claims and the provider, we have to decide if we log or register the user
-		if err := s.processLoginOrRegister(w, r, a, provider, claims); err != nil {
+		if _, err := s.processLogin(w, r, a, provider, claims); err != nil {
 			if errors.Is(err, flow.ErrCompletedByStrategy) {
 				return
 			}

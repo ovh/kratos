@@ -42,7 +42,8 @@ import (
 var TimeNow = func() time.Time { return time.Now().UTC() }
 
 func ViperSetProviderConfig(_ *testing.T, conf *config.Config, SAMLProvider ...saml.Configuration) {
-	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &saml.ConfigurationCollection{SAMLProviders: SAMLProvider})
+	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config",
+		&saml.ConfigurationCollection{AutoRegister: true, SAMLProviders: SAMLProvider})
 	conf.MustSet(context.Background(), config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".enabled", true)
 }
 
@@ -320,6 +321,7 @@ func getAttribute(n *html.Node, key string) (string, bool) {
 
 func viperSetProviderConfig(_ *testing.T, conf *config.Config, providers ...saml.Configuration) {
 	ctx := context.Background()
-	conf.MustSet(ctx, config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config", &saml.ConfigurationCollection{SAMLProviders: providers})
+	conf.MustSet(ctx, config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".config",
+		&saml.ConfigurationCollection{AutoRegister: true, SAMLProviders: providers})
 	conf.MustSet(ctx, config.ViperKeySelfServiceStrategyConfig+"."+string(identity.CredentialsTypeSAML)+".enabled", true)
 }

@@ -150,6 +150,7 @@ const (
 	ErrorValidationPasswordTooManyBreaches
 	ErrorValidationNoCodeUser
 	ErrorValidationTraitsMismatch
+	ErrorValidationLoginIdentityNotFound
 	ErrorValidationSAMLProviderNotFound
 )
 

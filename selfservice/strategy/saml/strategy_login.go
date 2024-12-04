@@ -14,6 +14,7 @@ import (
 	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/node"
 	"github.com/ory/kratos/x"
+	"github.com/ory/x/sqlcon"
 	"github.com/ory/x/urlx"
 	"github.com/pkg/errors"
 	"net/http"
@@ -71,9 +72,54 @@ type SubmitSelfServiceLoginFlowWithSAMLMethodBody struct {
 }
 
 // Login and give a session to the user
-func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login.Flow, provider Provider, c *identity.Credentials, i *identity.Identity, claims *Claims) (*registration.Flow, error) {
+func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login.Flow, provider Provider, claims *Claims) (*registration.Flow, error) {
+	// If the user's ID is null, we have to handle error
+	if claims.Subject == "" {
+		return nil, s.handleError(w, r, a, provider.Config().ID, nil, errors.New("the user ID is empty: the problem probably comes from the mapping between the SAML attributes and the identity attributes"))
+	}
 
-	err := s.updateIdentityTraits(w, r, i, provider, claims)
+	// This is a check to see if the user exists in the database
+	i, c, err := s.d.PrivilegedIdentityPool().FindByCredentialsIdentifier(r.Context(), identity.CredentialsTypeSAML, identity.SAMLUniqueID(provider.Config().ID, claims.Subject))
+
+	if err != nil {
+		// ErrNoRows is returned when a SQL SELECT statement returns no rows.
+		if errors.Is(err, sqlcon.ErrNoRows) {
+			if config, err := s.Config(r.Context()); err != nil {
+				return nil, s.handleError(w, r, a, provider.Config().ID, nil, err)
+			} else if !config.AutoRegister {
+				return nil, s.handleError(w, r, a, provider.Config().ID, nil, NewErrorValidationLoginIdentityNotFound())
+			}
+
+			// The user doesn't exist yet so we register him
+
+			// If return_to was set before, we need to preserve it.
+			var opts []registration.FlowOption
+			if len(a.ReturnTo) > 0 {
+				opts = append(opts, registration.WithFlowReturnTo(a.ReturnTo))
+			}
+
+			registerFlow, err := s.d.RegistrationHandler().NewRegistrationFlow(w, r, a.Type, opts...)
+			if err != nil {
+				return nil, s.handleError(w, r, a, provider.Config().ID, nil, err)
+			}
+
+			err = s.d.SessionTokenExchangePersister().MoveToNewFlow(r.Context(), a.ID, registerFlow.ID)
+			if err != nil {
+				return nil, s.handleError(w, r, a, provider.Config().ID, nil, err)
+			}
+
+			if err = s.processRegistration(w, r, registerFlow, provider, claims); err != nil {
+				return registerFlow, err
+			}
+
+			return registerFlow, nil
+
+		} else {
+			return nil, err
+		}
+	}
+
+	err = s.updateIdentityTraits(w, r, i, provider, claims)
 	if err != nil {
 		return nil, s.handleError(w, r, a, provider.Config().ID, i.Traits, err)
 	}
@@ -185,5 +231,4 @@ func (s *Strategy) updateIdentityTraits(w http.ResponseWriter, r *http.Request, 
 	}
 
 	return nil
-
 }

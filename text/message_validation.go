@@ -417,6 +417,14 @@ func NewErrorValidationTraitsMismatch() *Message {
 	}
 }
 
+func NewErrorValidationLoginIdentityNotFound() *Message {
+	return &Message{
+		ID:   ErrorValidationLoginIdentityNotFound,
+		Text: "Identity not found.",
+		Type: Error,
+	}
+}
+
 func NewErrorValidationSAMLProviderNotFound() *Message {
 	return &Message{
 		ID:   ErrorValidationSAMLProviderNotFound,

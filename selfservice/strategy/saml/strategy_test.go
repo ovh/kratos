@@ -11,12 +11,14 @@ import (
 	"github.com/ory/kratos/internal/testhelpers"
 	"github.com/ory/kratos/selfservice/flow"
 	"github.com/ory/kratos/selfservice/flow/login"
+	"github.com/ory/kratos/selfservice/flow/registration"
 	"github.com/ory/kratos/selfservice/sessiontokenexchange"
 	"github.com/ory/kratos/session"
 	"github.com/ory/kratos/text"
 	"github.com/ory/kratos/ui/container"
 	"github.com/ory/kratos/x"
 	"github.com/ory/x/assertx"
+	"github.com/ory/x/snapshotx"
 	"github.com/ory/x/sqlcon"
 	"github.com/ory/x/urlx"
 	"github.com/tidwall/gjson"
@@ -97,6 +99,23 @@ func TestStrategy(t *testing.T) {
 		assert.Contains(t, gjson.GetBytes(body, "ui.action").String(), "self-service/login", "%s", body)
 	}
 
+	var newRegistrationFlow = func(t *testing.T, requestURL string, exp time.Duration, flowType flow.Type) (req *registration.Flow) {
+		// Use NewRegistrationFlow to instantiate the request but change the things we need to control a copy of it.
+		req, err := reg.RegistrationHandler().NewRegistrationFlow(httptest.NewRecorder(),
+			&http.Request{URL: urlx.ParseOrPanic(requestURL)}, flowType)
+		require.NoError(t, err)
+		req.RequestURL = requestURL
+		req.ExpiresAt = time.Now().Add(exp)
+		require.NoError(t, reg.RegistrationFlowPersister().UpdateRegistrationFlow(context.Background(), req))
+
+		// sanity check
+		got, err := reg.RegistrationFlowPersister().GetRegistrationFlow(context.Background(), req.ID)
+		require.NoError(t, err)
+
+		require.Len(t, got.UI.Nodes, len(req.UI.Nodes), "%+v", got)
+
+		return
+	}
 	var newLoginFlow = func(t *testing.T, requestURL string, exp time.Duration, flowType flow.Type) (req *login.Flow) {
 		// Use NewLoginFlow to instantiate the request but change the things we need to control a copy of it.
 		req, _, err := reg.LoginHandler().NewLoginFlow(httptest.NewRecorder(),
@@ -167,7 +186,7 @@ func TestStrategy(t *testing.T) {
 		require.NoError(t, err, body)
 
 		n := traverse(doc, name)
-		require.NotNil(t, n)
+		require.NotNil(t, n, "%s", body)
 		result, ok := getAttribute(n, "value")
 		require.True(t, ok)
 
@@ -232,7 +251,7 @@ func TestStrategy(t *testing.T) {
 		return
 	}
 
-	createPasswordIdentity := func(t *testing.T, password string) *identity.Identity {
+	deleteIdentity := func() {
 		var err error
 		i, _, err := reg.PrivilegedIdentityPool().FindByCredentialsIdentifier(
 			context.Background(),
@@ -246,8 +265,13 @@ func TestStrategy(t *testing.T) {
 			err := reg.PrivilegedIdentityPool().DeleteIdentity(context.Background(), i.ID)
 			assert.NoError(t, err)
 		}
-		i = identity.NewIdentity(config.DefaultIdentityTraitsSchemaID)
+	}
+
+	createPasswordIdentity := func(t *testing.T, password string) *identity.Identity {
+		deleteIdentity()
+		i := identity.NewIdentity(config.DefaultIdentityTraitsSchemaID)
 		p, err := reg.Hasher(ctx).Generate(ctx, []byte(password))
+		assert.NoError(t, err)
 		i.SetCredentials(identity.CredentialsTypePassword, identity.Credentials{
 			Identifiers: []string{email},
 			Config:      sqlxx.JSONRawMessage(`{"hashed_password":"` + string(p) + `"}`),
@@ -257,6 +281,17 @@ func TestStrategy(t *testing.T) {
 		require.NoError(t, reg.PrivilegedIdentityPool().CreateIdentity(context.Background(), i))
 
 		return i
+	}
+
+	setAutoRegisterToFalse := func(t *testing.T) {
+		configKey := config.ViperKeySelfServiceStrategyConfig + ".saml.config"
+		currentConfig := conf.GetProvider(ctx).Get(configKey).(*saml.ConfigurationCollection)
+		currentConfig.AutoRegister = false
+		conf.MustSet(ctx, configKey, currentConfig)
+		t.Cleanup(func() {
+			currentConfig.AutoRegister = true
+			conf.MustSet(ctx, configKey, currentConfig)
+		})
 	}
 
 	t.Run("case=should fail because provider does not exist", func(t *testing.T) {
@@ -299,11 +334,57 @@ func TestStrategy(t *testing.T) {
 		})
 	})
 
-	t.Run("case=login without registered account and then login again", func(t *testing.T) {
+	t.Run("case=cannot register multiple accounts with the same SAML account", func(t *testing.T) {
+		email = "user1@example.com"
+		deleteIdentity()
+
+		doRegistration := func(t *testing.T) {
+			f := newRegistrationFlow(t, returnTS.URL, time.Minute, flow.TypeBrowser)
+			action := afv(t, f.ID, providerId)
+
+			client := NewTestClient(t, nil)
+
+			//Post to kratos to initiate SAML flow
+			res, body := makeRequestWithClient(t, action, url.Values{
+				"method":       []string{"saml"},
+				"samlProvider": []string{providerId},
+			}, client, 200)
+
+			//Post to identity provider UI
+			res, body = makeRequestWithClient(t, res.Request.URL.String(), url.Values{
+				"username": []string{"user1"},
+				"password": []string{"user1pass"},
+			}, client, 200)
+
+			//Extract SAML response from body returned by identity provider
+			SAMLResponse := getValueByName(body, "SAMLResponse")
+			relayState := getValueByName(body, "RelayState")
+
+			//Post SAML response to kratos
+			res, body = makeRequestWithClient(t, urlAcs, url.Values{
+				"SAMLResponse": []string{SAMLResponse},
+				"RelayState":   []string{relayState},
+			}, client, 200)
+
+			ai(t, res, body)
+			assert.Equal(t, providerId, gjson.GetBytes(body, "authentication_methods.0.provider").String(), "%s", body)
+		}
+
+		t.Run("case=should pass registration", func(t *testing.T) {
+			doRegistration(t)
+		})
+
+		t.Run("case=try another registration", func(t *testing.T) {
+			doRegistration(t)
+		})
+	})
+
+	t.Run("case=login without registered account", func(t *testing.T) {
 		t.Run("case=browser", func(t *testing.T) {
 			email = "user1@example.com"
+			deleteIdentity()
 
-			doLogin := func(t *testing.T) {
+			doLogin := func(t *testing.T) (*http.Response, []byte) {
 				f := newLoginFlow(t, returnTS.URL, time.Minute, flow.TypeBrowser)
 				action := afv(t, f.ID, providerId)
 
@@ -331,12 +412,25 @@ func TestStrategy(t *testing.T) {
 					"RelayState":   []string{relayState},
 				}, client, 200)
 
-				ai(t, res, body)
-				assert.Equal(t, providerId, gjson.GetBytes(body, "authentication_methods.0.provider").String(), "%s", body)
+				return res, body
 			}
 
-			doLogin(t)
-			doLogin(t)
+			t.Run("case=should fail login if identity not found", func(t *testing.T) {
+				setAutoRegisterToFalse(t)
+				res, body := doLogin(t)
+				aue(t, res, body, text.NewErrorValidationLoginIdentityNotFound().Text)
+			})
+			t.Run("case=should register new identity if identity not found", func(t *testing.T) {
+				res, body := doLogin(t)
+				ai(t, res, body)
+				assert.Equal(t, providerId, gjson.GetBytes(body, "authentication_methods.0.provider").String(), "%s", body)
+
+			})
+			t.Run("case=should login with existing identity", func(t *testing.T) {
+				res, body := doLogin(t)
+				ai(t, res, body)
+				assert.Equal(t, providerId, gjson.GetBytes(body, "authentication_methods.0.provider").String(), "%s", body)
+			})
 		})
 	})
 
@@ -486,6 +580,16 @@ func TestStrategy(t *testing.T) {
 				checkCredentialsLinked(t, false, i.ID, string(body))
 			})
 		})
+	})
+
+	t.Run("method=TestPopulateSignUpMethod", func(t *testing.T) {
+		conf.MustSet(ctx, config.ViperKeyPublicBaseURL, "https://foo/")
+
+		sr, err := registration.NewFlow(conf, time.Minute, "nosurf", &http.Request{URL: urlx.ParseOrPanic("/")}, flow.TypeBrowser)
+		require.NoError(t, err)
+		require.NoError(t, reg.RegistrationStrategies(context.Background()).MustStrategy(identity.CredentialsTypeSAML).(*saml.Strategy).PopulateRegistrationMethod(&http.Request{}, sr))
+
+		snapshotx.SnapshotT(t, sr.UI, snapshotx.ExceptPaths("action", "nodes.0.attributes.value"))
 	})
 }
 

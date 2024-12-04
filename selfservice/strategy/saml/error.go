@@ -46,3 +46,14 @@ func NewErrProviderIDMissingError() error {
 		Messages: new(text.Messages).Add(text.NewErrorValidationSAMLProviderNotFound()),
 	})
 }
+
+func NewErrorValidationLoginIdentityNotFound() error {
+	t := text.NewErrorValidationLoginIdentityNotFound()
+	return errors.WithStack(&schema.ValidationError{
+		ValidationError: &jsonschema.ValidationError{
+			Message:     t.Text,
+			InstancePtr: "#/",
+		},
+		Messages: new(text.Messages).Add(t),
+	})
+}

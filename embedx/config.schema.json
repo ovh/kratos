@@ -2032,6 +2032,11 @@
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
+                    "auto_register": {
+                      "type": "boolean",
+                      "title": "If identity not found in login flow, then auto-create registration flow and new identity.",
+                      "default": true
+                    },
                     "providers": {
                       "title": "SAML Provider",
                       "description": "All information required to implement a SAML authentication",
